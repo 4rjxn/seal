@@ -31,7 +31,10 @@ impl RunEssentials{
 fn set_env()->RunEssentials{
     let essentials = RunEssentials::set_values();
     let path = Path::new(&essentials.home);
-    env::set_current_dir(path).unwrap();
+    match env::set_current_dir(path){
+        Ok(()) => {},
+        Err(err) => eprintln!("{}",err),
+    }
     essentials
 }
 
@@ -67,9 +70,12 @@ fn main() {
         match argv[0].as_str() {
             "exit"=>process::exit(0x0100),
             "cd" => {
-                let new_dir = &argv[1];
+                let new_dir = if argv.len()>1 {&argv[1]} else {&user_details.home};
                 let root = Path::new(&new_dir);
-                env::set_current_dir(root).unwrap();
+                match env::set_current_dir(root){
+                    Ok(()) => {},
+                    Err(err) => eprintln!("{}",err),
+                }
             }
             _=>execute(argv),
         }
