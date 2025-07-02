@@ -1,15 +1,10 @@
 use std::io;
 use std::io::Write;
 use std::process;
-use std::str::SplitWhitespace;
 use std::path::Path;
 use std::env;
 use std::fs;
 
-struct UserInput<'b>{
-    command:String,
-    args:SplitWhitespace<'b>,
-}
 
 struct RunEssentials{
     host:String,
@@ -40,63 +35,52 @@ fn set_env()->RunEssentials{
     essentials
 }
 
-fn tokenise(input:&String){
-    let chr_list = input.as_bytes();
+fn tokenise(input:&String) -> Vec<String>{
+    let chr_list = input.chars();
+    let mut read_buff:String = String::new();
+    let mut argv:Vec<String> = Vec::new();
     let mut is_quote:bool = false;
-    let mut list:Vec<&str> = Vec::new();
-    let mut strbuffer:Vec<&str> = Vec::new();
-    let mut index = 0;
-    for (i,&val) in chr_list.iter().enumerate(){
-        if (val == b' ' || val == b'"') && !is_quote{
-            list.push(&input[index..i]);
-            index = i+1;
-        }
-        if (val == b' ' || val == b'"') && is_quote{
-            strbuffer.push(&input[index..i]);
-            index = i+1;
-        }
-        if val == b'"'{
+    for i in chr_list{
+        if i == '"'{
             is_quote = !is_quote;
+            continue;
+        }
+        if !is_quote && i == ' ' || i == '\n'{
+            argv.push(read_buff);
+            read_buff = String::new();
+        }
+        else{
+            read_buff.push(i);
         }
     }
-    println!("{:?}",list);
-    println!("{:?}",strbuffer.join(""));
+    argv
 }
 
 fn main() {
     let user_details = set_env();
-    //println!("\"hai helloo ahd\"");
     loop{
         let mut input = String::new();
         print!("{}@{}:",user_details.user,user_details.host);
         io::stdout().flush().expect("flush error");
         io::stdin().read_line(&mut input).expect("read error");
-        tokenise(&input);
-        let mut parts = input.split_whitespace();
-        let user_input = UserInput{
-            command:match parts.next(){
-                Some(rslt)=>rslt.to_string(),
-                None =>continue,
-            },
-            args:parts,
-        };
-        match user_input.command.as_str() {
+        let argv = tokenise(&input);
+        match argv[0].as_str() {
             "exit"=>process::exit(0x0100),
             "cd" => {
-                let new_dir = user_input.args.peekable().peek().map_or("/", |x| *x);
-                let root = Path::new(new_dir);
+                let new_dir = &argv[1];
+                let root = Path::new(&new_dir);
                 env::set_current_dir(root).unwrap();
             }
-            _=>execute(user_input),
+            _=>execute(argv),
         }
     }
 }
 
-fn execute(user_input:UserInput){
-    let mut child = match process::Command::new(&user_input.command).args(user_input.args).spawn(){
+fn execute(argv:Vec<String>){
+    let mut child = match process::Command::new(&argv[0]).args(&argv[1..]).spawn(){
         Ok(rst)=>rst,
         Err(_)=>{
-            println!("'{}' command not found",user_input.command);
+            println!("'{}' command not found",argv[0]);
             return;
         },
     };
