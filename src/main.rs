@@ -12,10 +12,30 @@ fn read_and_parse() -> Vec<String> {
     print!("$ ");
     stdout().flush().unwrap();
     stdin().read_line(&mut command_input).unwrap();
-    let parsed_command: Vec<String> = command_input
-        .split_whitespace()
-        .map(|s| s.to_owned())
-        .collect();
+    let mut parsed_command = Vec::new();
+    let mut word = String::new();
+    let mut isquote = false;
+    for char in command_input.trim().chars() {
+        match char {
+            '\'' => {
+                isquote = !isquote;
+            }
+            ' ' => {
+                if isquote {
+                    word.push(char);
+                    continue;
+                }
+                if !word.is_empty() {
+                    parsed_command.push(word.to_owned());
+                    word = String::new();
+                }
+            }
+            _ => word.push(char),
+        }
+    }
+    if !word.is_empty() {
+        parsed_command.push(word.to_string());
+    }
     parsed_command
 }
 
@@ -99,8 +119,7 @@ fn pwd_builtin() {
 }
 
 fn execute_command(command: &[String]) {
-    let path = locate_command(&command[0]).unwrap();
-    let mut process = Command::new(&path);
+    let mut process = Command::new(&command[0]);
     if command.len() > 1 {
         process.args(&command[1..]);
     }
@@ -125,6 +144,7 @@ fn process_command(command: &[String]) -> Result<(), ()> {
 fn main() {
     loop {
         let command = read_and_parse();
+        println!("{:?}", command);
         if is_valid(&command) {
             match process_command(&command) {
                 Ok(_) => continue,
