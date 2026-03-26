@@ -6,7 +6,7 @@ use crate::parser::{
 use std::{
     env,
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Write, stdout},
+    io::{BufRead, BufReader, Cursor, Read, Write, copy},
     path::PathBuf,
     process::{self, ChildStdout, Command as OsCommand, Stdio},
 };
@@ -27,7 +27,7 @@ fn exit_builtin() {
     process::exit(0)
 }
 
-fn echo_builtin(command: &Command) {
+fn echo_builtin(command: &Command) -> Option<Cursor<String>> {
     let data_string = command.args.join(" ") + "\n";
     if command.redirects.len() > 0 {
         match &command.redirects[0] {
@@ -35,6 +35,7 @@ fn echo_builtin(command: &Command) {
                 let mut file = File::create(file).unwrap();
                 file.write_all(data_string.as_bytes()).unwrap();
             }
+            Redirects::OutputErr(_) => {}
             Redirects::Append(file) => {
                 let mut file = OpenOptions::new()
                     .append(true)
@@ -43,10 +44,11 @@ fn echo_builtin(command: &Command) {
                     .unwrap();
                 file.write_all(data_string.as_bytes()).unwrap();
             }
+            Redirects::AppendErr(_) => {}
         }
-        return;
+        return None;
     }
-    stdout().write_all(data_string.as_bytes()).unwrap();
+    return Some(Cursor::new(data_string));
 }
 
 fn type_builtin(command: &Command) {
@@ -71,20 +73,22 @@ fn pwd_builtin() {
     println!("{}", path.to_str().unwrap())
 }
 
-fn execute_command(command: &Command, data: Option<ChildStdout>) -> Option<ChildStdout> {
+fn execute_command<R: Read>(command: &Command, data: &mut Option<R>) -> Option<ChildStdout> {
     let mut process = OsCommand::new(&command.program);
-    process.args(&command.args);
-    match data {
-        Some(data) => {
-            process.stdin(Stdio::from(data));
-        }
-        None => (),
-    }
-    if command.redirects.len() > 0 {
-        match &command.redirects[0] {
+    process
+        .args(&command.args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
+    for redirect in &command.redirects {
+        match redirect {
             Redirects::Output(file) => {
                 let f = File::create(file).unwrap();
                 process.stdout(f);
+            }
+            Redirects::OutputErr(file) => {
+                let f = File::create(file).unwrap();
+                process.stderr(f);
             }
             Redirects::Append(file) => {
                 let f = OpenOptions::new()
@@ -94,17 +98,33 @@ fn execute_command(command: &Command, data: Option<ChildStdout>) -> Option<Child
                     .unwrap();
                 process.stdout(f);
             }
+            Redirects::AppendErr(file) => {
+                let f = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(file)
+                    .unwrap();
+                process.stderr(f);
+            }
         }
-    } else {
-        process.stdout(Stdio::piped()).stderr(Stdio::inherit());
     }
     let mut child = process.spawn().unwrap();
+    if let Some(reader) = data {
+        if let Some(stdin) = child.stdin.as_mut() {
+            copy(reader, stdin).unwrap();
+        }
+    }
+    drop(child.stdin.take());
     child.wait().unwrap();
-    Some(child.stdout.unwrap())
+    println!("match called");
+    match child.stdout {
+        Some(data) => return Some(data),
+        None => return None,
+    }
 }
 
 fn process_command(commands: Vec<Command>) -> Result<(), ()> {
-    let mut data_buff: Option<ChildStdout> = None;
+    let mut data_buff: Option<Box<dyn Read>> = None;
     for command in commands {
         if !command.is_valid() {
             println!("{}: command not found", command.program);
@@ -114,12 +134,18 @@ fn process_command(commands: Vec<Command>) -> Result<(), ()> {
             exit_builtin()
         }
         match command.program.as_str() {
-            "echo" => echo_builtin(&command),
+            "echo" => {
+                if let Some(data) = echo_builtin(&command) {
+                    data_buff = Some(Box::from(data));
+                }
+            }
             "type" => type_builtin(&command),
             "cd" => cd_builtin(&command),
             "pwd" => pwd_builtin(),
             _ => {
-                data_buff = execute_command(&command, data_buff);
+                if let Some(data) = execute_command(&command, &mut data_buff) {
+                    data_buff = Some(Box::from(data))
+                }
             }
         }
     }

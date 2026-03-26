@@ -12,13 +12,17 @@ pub enum Tokens {
     Pipe,
     Output,
     Append,
+    OutputErr,
+    AppendErr,
 }
 
 #[derive(Debug)]
 pub enum Redirects {
     //Input(String),
     Output(String),
+    OutputErr(String),
     Append(String),
+    AppendErr(String),
 }
 
 #[derive(Debug)]
@@ -74,8 +78,10 @@ pub struct Pipeline {
 
 fn string_to_token(val: &String) -> Tokens {
     match val.as_str() {
+        "2>" => Tokens::OutputErr,
+        "2>>" => Tokens::AppendErr,
         ">>" => Tokens::Append,
-        ">" => Tokens::Output,
+        ">" | "1>" => Tokens::Output,
         "|" => Tokens::Pipe,
         _ => Tokens::Word(val.to_owned()),
     }
@@ -160,10 +166,24 @@ fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
                     tokens.remove(0);
                 }
             }
+            Tokens::OutputErr => {
+                tokens.remove(0);
+                if let Some(Tokens::Word(file)) = tokens.first() {
+                    redirects.push(Redirects::OutputErr(file.to_owned()));
+                    tokens.remove(0);
+                }
+            }
             Tokens::Append => {
                 tokens.remove(0);
                 if let Some(Tokens::Word(file)) = tokens.first() {
                     redirects.push(Redirects::Append(file.to_owned()));
+                    tokens.remove(0);
+                }
+            }
+            Tokens::AppendErr => {
+                tokens.remove(0);
+                if let Some(Tokens::Word(file)) = tokens.first() {
+                    redirects.push(Redirects::AppendErr(file.to_owned()));
                     tokens.remove(0);
                 }
             }
