@@ -1,4 +1,10 @@
-use std::io::{Write, stdin, stdout};
+use std::{
+    env,
+    io::{Write, stdin, stdout},
+    path::PathBuf,
+};
+
+use is_executable::IsExecutable;
 
 #[derive(Debug)]
 pub enum Tokens {
@@ -9,7 +15,7 @@ pub enum Tokens {
 }
 
 #[derive(Debug)]
-enum Redirects {
+pub enum Redirects {
     //Input(String),
     Output(String),
     Append(String),
@@ -17,14 +23,53 @@ enum Redirects {
 
 #[derive(Debug)]
 pub struct Command {
-    program: String,
-    args: Vec<String>,
-    redirects: Vec<Redirects>,
+    pub program: String,
+    pub args: Vec<String>,
+    pub redirects: Vec<Redirects>,
+}
+
+pub fn locate_command(command: &String) -> Result<PathBuf, ()> {
+    match env::var_os("PATH") {
+        Some(paths) => {
+            for mut path in env::split_paths(&paths) {
+                path = path.join(command);
+                if path.is_executable() {
+                    return Ok(path);
+                }
+            }
+            return Err(());
+        }
+        None => Err(()),
+    }
+}
+
+fn is_valid_command(command: &String) -> bool {
+    match locate_command(command) {
+        Ok(_) => return true,
+        Err(_) => return false,
+    }
+}
+
+pub fn is_builtin(command: &String) -> bool {
+    return match command.as_str() {
+        "exit" => true,
+        "echo" => true,
+        "type" => true,
+        "pwd" => true,
+        "cd" => true,
+        _ => false,
+    };
+}
+
+impl Command {
+    pub fn is_valid(&self) -> bool {
+        is_builtin(&self.program) || is_valid_command(&self.program)
+    }
 }
 
 #[derive(Debug)]
 pub struct Pipeline {
-    commands: Vec<Command>,
+    pub commands: Vec<Command>,
 }
 
 fn string_to_token(val: &String) -> Tokens {
