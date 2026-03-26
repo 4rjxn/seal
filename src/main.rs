@@ -1,8 +1,8 @@
 use std::{
     env,
-    io::{Write, stderr, stdin, stdout},
+    io::{Write, stdin, stdout},
     path::PathBuf,
-    process::{self, Command},
+    process::{self, Command, Stdio},
 };
 
 use is_executable::IsExecutable;
@@ -14,14 +14,39 @@ fn read_and_parse() -> Vec<String> {
     stdin().read_line(&mut command_input).unwrap();
     let mut parsed_command = Vec::new();
     let mut word = String::new();
-    let mut isquote = false;
+    let mut is_quote = false;
+    let mut is_double_quote = false;
+    let mut is_black_slash = false;
     for char in command_input.trim().chars() {
+        if is_black_slash {
+            word.push(char);
+            is_black_slash = !is_black_slash;
+            continue;
+        }
         match char {
+            '\\' => {
+                if !is_quote {
+                    is_black_slash = !is_black_slash;
+                    continue;
+                }
+                word.push(char);
+            }
+            '"' => {
+                if !is_quote {
+                    is_double_quote = !is_double_quote;
+                    continue;
+                }
+                word.push(char);
+            }
             '\'' => {
-                isquote = !isquote;
+                if !is_double_quote {
+                    is_quote = !is_quote;
+                    continue;
+                }
+                word.push(char);
             }
             ' ' => {
-                if isquote {
+                if is_quote || is_double_quote {
                     word.push(char);
                     continue;
                 }
@@ -123,9 +148,13 @@ fn execute_command(command: &[String]) {
     if command.len() > 1 {
         process.args(&command[1..]);
     }
-    let status = process.output().unwrap();
-    stdout().write_all(&status.stdout).unwrap();
-    stderr().write_all(&status.stderr).unwrap();
+    let mut child = process
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap();
+    child.wait().unwrap();
 }
 
 fn process_command(command: &[String]) -> Result<(), ()> {
@@ -144,7 +173,6 @@ fn process_command(command: &[String]) -> Result<(), ()> {
 fn main() {
     loop {
         let command = read_and_parse();
-        println!("{:?}", command);
         if is_valid(&command) {
             match process_command(&command) {
                 Ok(_) => continue,
