@@ -1,68 +1,12 @@
+mod parser;
+
+use crate::parser::{parse_pipelines, read_and_parse};
+use is_executable::IsExecutable;
 use std::{
     env,
-    io::{Write, stdin, stdout},
     path::PathBuf,
     process::{self, Command, Stdio},
 };
-
-use is_executable::IsExecutable;
-
-fn read_and_parse() -> Vec<String> {
-    let mut command_input = String::new();
-    print!("$ ");
-    stdout().flush().unwrap();
-    stdin().read_line(&mut command_input).unwrap();
-    let mut parsed_command = Vec::new();
-    let mut word = String::new();
-    let mut is_quote = false;
-    let mut is_double_quote = false;
-    let mut is_black_slash = false;
-    for char in command_input.trim().chars() {
-        if is_black_slash {
-            word.push(char);
-            is_black_slash = !is_black_slash;
-            continue;
-        }
-        match char {
-            '\\' => {
-                if !is_quote {
-                    is_black_slash = !is_black_slash;
-                    continue;
-                }
-                word.push(char);
-            }
-            '"' => {
-                if !is_quote {
-                    is_double_quote = !is_double_quote;
-                    continue;
-                }
-                word.push(char);
-            }
-            '\'' => {
-                if !is_double_quote {
-                    is_quote = !is_quote;
-                    continue;
-                }
-                word.push(char);
-            }
-            ' ' => {
-                if is_quote || is_double_quote {
-                    word.push(char);
-                    continue;
-                }
-                if !word.is_empty() {
-                    parsed_command.push(word.to_owned());
-                    word = String::new();
-                }
-            }
-            _ => word.push(char),
-        }
-    }
-    if !word.is_empty() {
-        parsed_command.push(word.to_string());
-    }
-    parsed_command
-}
 
 fn is_valid(command: &[String]) -> bool {
     is_builtin(&command[0]) || is_valid_command(&command[0])
@@ -173,12 +117,13 @@ fn process_command(command: &[String]) -> Result<(), ()> {
 fn main() {
     loop {
         let command = read_and_parse();
-        if is_valid(&command) {
-            match process_command(&command) {
-                Ok(_) => continue,
-                Err(_) => (),
-            }
-        }
-        print!("{}: command not found\n", command[0]);
+        //if is_valid(&command) {
+        //    match process_command(&command) {
+        //        Ok(_) => continue,
+        //        Err(_) => (),
+        //    }
+        //}
+        let pipe = parse_pipelines(command).unwrap();
+        println!("{:?}", pipe);
     }
 }
