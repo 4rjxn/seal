@@ -80,7 +80,7 @@ fn string_to_token(val: &String) -> Tokens {
     match val.as_str() {
         "2>" => Tokens::OutputErr,
         "2>>" => Tokens::AppendErr,
-        ">>" => Tokens::Append,
+        ">>" | "1>>" => Tokens::Append,
         ">" | "1>" => Tokens::Output,
         "|" => Tokens::Pipe,
         _ => Tokens::Word(val.to_owned()),
