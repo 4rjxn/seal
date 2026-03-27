@@ -34,8 +34,11 @@ fn echo_builtin(command: &Command) -> Option<Cursor<String>> {
             Redirects::Output(file) => {
                 let mut file = File::create(file).unwrap();
                 file.write_all(data_string.as_bytes()).unwrap();
+                return None;
             }
-            Redirects::OutputErr(_) => {}
+            Redirects::OutputErr(file) => {
+                let _ = File::create(file).unwrap();
+            }
             Redirects::Append(file) => {
                 let mut file = OpenOptions::new()
                     .append(true)
@@ -43,10 +46,10 @@ fn echo_builtin(command: &Command) -> Option<Cursor<String>> {
                     .open(file)
                     .unwrap();
                 file.write_all(data_string.as_bytes()).unwrap();
+                return None;
             }
             Redirects::AppendErr(_) => {}
         }
-        return None;
     }
     return Some(Cursor::new(data_string));
 }
@@ -77,7 +80,11 @@ fn execute_command<R: Read>(command: &Command, data: &mut Option<R>) -> Option<C
     let mut process = OsCommand::new(&command.program);
     process
         .args(&command.args)
-        .stdin(Stdio::inherit())
+        .stdin(if data.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::inherit()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());
     for redirect in &command.redirects {
@@ -110,13 +117,12 @@ fn execute_command<R: Read>(command: &Command, data: &mut Option<R>) -> Option<C
     }
     let mut child = process.spawn().unwrap();
     if let Some(reader) = data {
-        if let Some(stdin) = child.stdin.as_mut() {
-            copy(reader, stdin).unwrap();
+        if let Some(mut stdin) = child.stdin.take() {
+            copy(reader, &mut stdin).unwrap();
+            drop(stdin);
         }
     }
-    drop(child.stdin.take());
     child.wait().unwrap();
-    println!("match called");
     match child.stdout {
         Some(data) => return Some(data),
         None => return None,
