@@ -1,6 +1,6 @@
 # Seal 🦭
 
-Seal is a lightweight, Unix-like shell written in Rust. It provides a familiar command-line interface with support for essential shell features, including built-in commands, external program execution, input/output redirection, and piping.
+Seal is a lightweight, Unix-like shell written in Rust. It provides a familiar command-line interface with support for essential shell features, including built-in commands, external program execution, input/output redirection, and piping. Seal is my personal thing as result this may contain some explicit content.
 
 ## Features
 
@@ -83,4 +83,4 @@ This is a "quoted" argument
 
 ## License
 
-This project is open-source and available under the MIT License (or whichever license you prefer).
+This project is open-source and available under the GNU General Public License version 2.0 (GPL-2.0).
