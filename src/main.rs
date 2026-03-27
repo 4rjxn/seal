@@ -1,14 +1,28 @@
 mod parser;
 
+use nix::{
+    errno::Errno,
+    fcntl::{OFlag, open},
+    libc::{self, STDIN_FILENO, dup2, getpgid, getpid, tcsetpgrp},
+    sys::{
+        signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction, signal},
+        stat::Mode,
+        wait::waitpid,
+    },
+    unistd::{Pid, execvp, fork, setpgid},
+};
+
 use crate::parser::{
     Command, Redirects, is_builtin, locate_command, parse_pipelines, read_and_parse,
 };
 use std::{
     env,
+    ffi::CString,
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Cursor, Read, Write, copy},
+    io::{BufRead, BufReader, Cursor, Read, Write},
+    os::fd::AsRawFd,
     path::PathBuf,
-    process::{self, ChildStdout, Command as OsCommand, Stdio},
+    process,
 };
 
 fn cd_builtin(command: &Command) {
@@ -76,56 +90,65 @@ fn pwd_builtin() {
     println!("{}", path.to_str().unwrap())
 }
 
-fn execute_command<R: Read>(command: &Command, data: &mut Option<R>) -> Option<ChildStdout> {
-    let mut process = OsCommand::new(&command.program);
-    process
-        .args(&command.args)
-        .stdin(if data.is_some() {
-            Stdio::piped()
-        } else {
-            Stdio::inherit()
-        })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
+fn set_redirection(command: &Command) {
+    if command.redirects.is_empty() {
+        return;
+    }
     for redirect in &command.redirects {
         match redirect {
             Redirects::Output(file) => {
-                let f = File::create(file).unwrap();
-                process.stdout(f);
-            }
-            Redirects::OutputErr(file) => {
-                let f = File::create(file).unwrap();
-                process.stderr(f);
+                let fd = open(
+                    file.as_str(),
+                    OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_TRUNC,
+                    Mode::from_bits(0o644).unwrap(),
+                )
+                .expect("open failed");
+                unsafe { dup2(fd.as_raw_fd(), 1) };
             }
             Redirects::Append(file) => {
-                let f = OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open(file)
-                    .unwrap();
-                process.stdout(f);
+                let fd = open(
+                    file.as_str(),
+                    OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_APPEND,
+                    Mode::from_bits(0o644).unwrap(),
+                )
+                .expect("open failed");
+                unsafe { dup2(fd.as_raw_fd(), 1) };
             }
-            Redirects::AppendErr(file) => {
-                let f = OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open(file)
-                    .unwrap();
-                process.stderr(f);
-            }
+            _ => (),
         }
     }
-    let mut child = process.spawn().unwrap();
-    if let Some(reader) = data {
-        if let Some(mut stdin) = child.stdin.take() {
-            copy(reader, &mut stdin).unwrap();
-            drop(stdin);
+}
+
+fn execute_command<R: Read>(command: &Command, _data: &mut Option<R>) {
+    unsafe {
+        signal(Signal::SIGTTOU, SigHandler::SigIgn).unwrap();
+        if let Ok(fork_result) = fork() {
+            match fork_result {
+                nix::unistd::ForkResult::Child => {
+                    signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+                    setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
+                    let c = CString::new(command.program.as_bytes()).unwrap();
+                    let mut cargs = Vec::new();
+                    for arg in &command.args {
+                        cargs.push(CString::new(arg.as_bytes()).unwrap());
+                    }
+                    set_redirection(&command);
+                    execvp(&c, &cargs).expect("baaaaaaaad");
+                }
+                nix::unistd::ForkResult::Parent { child } => {
+                    setpgid(child, child).unwrap();
+                    tcsetpgrp(STDIN_FILENO, child.into());
+                    loop {
+                        match waitpid(child, None) {
+                            Ok(_) => break,
+                            Err(Errno::EINTR) => continue,
+                            Err(_) => break,
+                        }
+                    }
+                    tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
+                }
+            }
         }
-    }
-    child.wait().unwrap();
-    match child.stdout {
-        Some(data) => return Some(data),
-        None => return None,
     }
 }
 
@@ -148,11 +171,7 @@ fn process_command(commands: Vec<Command>) -> Result<(), ()> {
             "type" => type_builtin(&command),
             "cd" => cd_builtin(&command),
             "pwd" => pwd_builtin(),
-            _ => {
-                if let Some(data) = execute_command(&command, &mut data_buff) {
-                    data_buff = Some(Box::from(data))
-                }
-            }
+            _ => execute_command(&command, &mut data_buff),
         }
     }
     match data_buff {
@@ -171,6 +190,19 @@ fn process_command(commands: Vec<Command>) -> Result<(), ()> {
 }
 
 fn main() {
+    extern "C" fn handle_sigint(_: i32) {
+        unsafe {
+            libc::write(1, b"\n".as_ptr() as *const _, 1);
+        }
+    }
+    let action = SigAction::new(
+        SigHandler::Handler(handle_sigint),
+        SaFlags::empty(),
+        SigSet::empty(),
+    );
+    unsafe {
+        sigaction(Signal::SIGINT, &action).unwrap();
+    }
     loop {
         let command = read_and_parse();
         let pipeline = parse_pipelines(command).unwrap();

@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 is_executable = "1.0.5"
-nix = "0.31.2"
+nix = { version = "0.31.2", features = ["fs", "process", "signal"] }
+sdme = "0.5.3"

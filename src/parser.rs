@@ -1,6 +1,7 @@
+use sdme::read_line_interruptible;
 use std::{
     env,
-    io::{Write, stdin, stdout},
+    io::{Write, stdout},
     path::PathBuf,
 };
 
@@ -88,60 +89,75 @@ fn string_to_token(val: &String) -> Tokens {
 }
 
 pub fn read_and_parse() -> Vec<Tokens> {
-    let mut command_input = String::new();
-    print!("$ ");
-    stdout().flush().unwrap();
-    stdin().read_line(&mut command_input).unwrap();
-    let mut tokens = Vec::new();
-    let mut word = String::new();
-    let mut is_quote = false;
-    let mut is_double_quote = false;
-    let mut is_black_slash = false;
-    for char in command_input.trim().chars() {
-        if is_black_slash {
-            word.push(char);
-            is_black_slash = !is_black_slash;
+    loop {
+        let mut command_input = String::new();
+        print!("$ ");
+        stdout().flush().unwrap();
+        match read_line_interruptible(&mut command_input) {
+            Ok(0) => {}
+            Ok(_) => {}
+            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => {
+                continue;
+            }
+            Err(e) => {
+                eprintln!("error: {}", e);
+                continue;
+            }
+        }
+        let mut tokens = Vec::new();
+        let mut word = String::new();
+        let mut is_quote = false;
+        let mut is_double_quote = false;
+        let mut is_black_slash = false;
+        if command_input.is_empty() {
             continue;
         }
-        match char {
-            '\\' => {
-                if !is_quote {
-                    is_black_slash = !is_black_slash;
-                    continue;
-                }
+        for char in command_input.trim().chars() {
+            if is_black_slash {
                 word.push(char);
+                is_black_slash = !is_black_slash;
+                continue;
             }
-            '"' => {
-                if !is_quote {
-                    is_double_quote = !is_double_quote;
-                    continue;
-                }
-                word.push(char);
-            }
-            '\'' => {
-                if !is_double_quote {
-                    is_quote = !is_quote;
-                    continue;
-                }
-                word.push(char);
-            }
-            ' ' => {
-                if is_quote || is_double_quote {
+            match char {
+                '\\' => {
+                    if !is_quote {
+                        is_black_slash = !is_black_slash;
+                        continue;
+                    }
                     word.push(char);
-                    continue;
                 }
-                if !word.is_empty() {
-                    tokens.push(string_to_token(&word));
-                    word = String::new();
+                '"' => {
+                    if !is_quote {
+                        is_double_quote = !is_double_quote;
+                        continue;
+                    }
+                    word.push(char);
                 }
+                '\'' => {
+                    if !is_double_quote {
+                        is_quote = !is_quote;
+                        continue;
+                    }
+                    word.push(char);
+                }
+                ' ' => {
+                    if is_quote || is_double_quote {
+                        word.push(char);
+                        continue;
+                    }
+                    if !word.is_empty() {
+                        tokens.push(string_to_token(&word));
+                        word = String::new();
+                    }
+                }
+                _ => word.push(char),
             }
-            _ => word.push(char),
         }
+        if !word.is_empty() {
+            tokens.push(string_to_token(&word));
+        }
+        return tokens;
     }
-    if !word.is_empty() {
-        tokens.push(string_to_token(&word));
-    }
-    tokens
 }
 
 fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
@@ -154,7 +170,13 @@ fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
                 let word = word.to_owned();
                 tokens.remove(0);
                 if program.is_none() {
-                    program = Some(word)
+                    if let Ok(program_path) = locate_command(&word) {
+                        program = Some(program_path.to_str().unwrap().to_string());
+                        args.push(word);
+                    } else {
+                        program = Some(word.to_owned());
+                        args.push(word);
+                    }
                 } else {
                     args.push(word);
                 }
