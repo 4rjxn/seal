@@ -3,9 +3,9 @@ mod parser;
 use nix::{
     errno::Errno,
     fcntl::{OFlag, open},
-    libc::{self, STDIN_FILENO, dup2, getpgid, getpid, tcsetpgrp},
+    libc::{STDIN_FILENO, dup2, getpgid, getpid, tcsetpgrp},
     sys::{
-        signal::{self, SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction, signal},
+        signal::{SigHandler, Signal, signal},
         stat::Mode,
         wait::waitpid,
     },
@@ -27,8 +27,8 @@ use std::{
 
 fn cd_builtin(command: &Command) {
     let mut path = PathBuf::from(env::home_dir().unwrap());
-    if command.args.len() != 0 {
-        let abspath = &command.args[0].replacen("~", env::home_dir().unwrap().to_str().unwrap(), 1);
+    if command.args.len() > 1 {
+        let abspath = &command.args[1].replacen("~", env::home_dir().unwrap().to_str().unwrap(), 1);
         path = PathBuf::from(abspath);
     }
     match env::set_current_dir(&path) {
@@ -42,6 +42,7 @@ fn exit_builtin() {
 }
 
 fn echo_builtin(command: &Command) -> Option<Cursor<String>> {
+    println!("santhue {:?}", &command.args);
     let data_string = command.args.join(" ") + "\n";
     if command.redirects.len() > 0 {
         match &command.redirects[0] {
@@ -69,19 +70,19 @@ fn echo_builtin(command: &Command) -> Option<Cursor<String>> {
 }
 
 fn type_builtin(command: &Command) {
-    if command.args.len() > 0 {
-        if is_builtin(&command.args[0]) {
-            println!("{} is a shell builtin", command.args[0]);
+    if command.args.len() > 1 {
+        if is_builtin(&command.args[1]) {
+            println!("{} is a shell builtin", command.args[1]);
             return;
         }
-        match locate_command(&command.args[0]) {
+        match locate_command(&command.args[1]) {
             Ok(path) => {
-                println!("{} is {}", &command.args[0], path.to_str().unwrap());
+                println!("{} is {}", &command.args[1], path.to_str().unwrap());
                 return;
             }
             Err(_) => (),
         }
-        println!("{}: not found", command.args[0]);
+        println!("{}: not found", command.args[1]);
     }
 }
 
@@ -105,6 +106,15 @@ fn set_redirection(command: &Command) {
                 .expect("open failed");
                 unsafe { dup2(fd.as_raw_fd(), 1) };
             }
+            Redirects::OutputErr(file) => {
+                let fd = open(
+                    file.as_str(),
+                    OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_TRUNC,
+                    Mode::from_bits(0o644).unwrap(),
+                )
+                .expect("open failed");
+                unsafe { dup2(fd.as_raw_fd(), 2) };
+            }
             Redirects::Append(file) => {
                 let fd = open(
                     file.as_str(),
@@ -114,7 +124,15 @@ fn set_redirection(command: &Command) {
                 .expect("open failed");
                 unsafe { dup2(fd.as_raw_fd(), 1) };
             }
-            _ => (),
+            Redirects::AppendErr(file) => {
+                let fd = open(
+                    file.as_str(),
+                    OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_APPEND,
+                    Mode::from_bits(0o644).unwrap(),
+                )
+                .expect("open failed");
+                unsafe { dup2(fd.as_raw_fd(), 2) };
+            }
         }
     }
 }
@@ -190,19 +208,6 @@ fn process_command(commands: Vec<Command>) -> Result<(), ()> {
 }
 
 fn main() {
-    extern "C" fn handle_sigint(_: i32) {
-        unsafe {
-            libc::write(1, b"\n".as_ptr() as *const _, 1);
-        }
-    }
-    let action = SigAction::new(
-        SigHandler::Handler(handle_sigint),
-        SaFlags::empty(),
-        SigSet::empty(),
-    );
-    unsafe {
-        sigaction(Signal::SIGINT, &action).unwrap();
-    }
     loop {
         let command = read_and_parse();
         let pipeline = parse_pipelines(command).unwrap();

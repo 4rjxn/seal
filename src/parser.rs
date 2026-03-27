@@ -1,11 +1,7 @@
-use sdme::read_line_interruptible;
-use std::{
-    env,
-    io::{Write, stdout},
-    path::PathBuf,
-};
+use std::{env, path::PathBuf};
 
 use is_executable::IsExecutable;
+use rustyline::{DefaultEditor, error::ReadlineError};
 
 #[derive(Debug)]
 pub enum Tokens {
@@ -89,18 +85,20 @@ fn string_to_token(val: &String) -> Tokens {
 }
 
 pub fn read_and_parse() -> Vec<Tokens> {
+    let mut rl = DefaultEditor::new().unwrap();
     loop {
-        let mut command_input = String::new();
-        print!("$ ");
-        stdout().flush().unwrap();
-        match read_line_interruptible(&mut command_input) {
-            Ok(0) => {}
-            Ok(_) => {}
-            Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => {
+        let command_input;
+        let readline = rl.readline(String::from(">> ").as_str());
+        match readline {
+            Ok(line) => {
+                command_input = line;
+            }
+            Err(ReadlineError::Interrupted) => {
                 continue;
             }
-            Err(e) => {
-                eprintln!("error: {}", e);
+            Err(ReadlineError::Eof) => continue,
+            Err(err) => {
+                eprintln!("Error: {:?}", err);
                 continue;
             }
         }
