@@ -75,8 +75,11 @@ fn execute_command(commands: &Vec<Command>) {
     if commands.len() == 1 {
         if let Ok(built_in) = commands[0].is_builtin() {
             run_builtin(&commands[0], built_in);
+            return;
         }
     }
+    let mut children = Vec::new();
+    let mut pgid: Option<Pid> = None;
     for (i, command) in commands.iter().enumerate() {
         let (read_end, write_end) = if i < commands.len() - 1 {
             let (r, w) = pipe().unwrap();
@@ -90,6 +93,11 @@ fn execute_command(commands: &Vec<Command>) {
                 match fork_result {
                     nix::unistd::ForkResult::Child => {
                         signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+                        if let Some(pgid) = pgid {
+                            setpgid(Pid::from_raw(0), pgid).unwrap();
+                        } else {
+                            setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
+                        }
                         setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
                         let c = CString::new(command.program.as_bytes()).unwrap();
                         let mut cargs = Vec::new();
@@ -98,9 +106,11 @@ fn execute_command(commands: &Vec<Command>) {
                         }
                         if let Some(fd) = &prev_read {
                             dup2(fd.as_raw_fd(), STDIN_FILENO);
+                            close(fd.as_raw_fd()).unwrap();
                         }
                         if let Some(w) = write_end {
                             dup2(w.as_raw_fd(), STDOUT_FILENO);
+                            close(w).unwrap();
                         }
 
                         set_redirection(&command);
@@ -112,6 +122,9 @@ fn execute_command(commands: &Vec<Command>) {
                         }
                     }
                     nix::unistd::ForkResult::Parent { child } => {
+                        if pgid.is_none() {
+                            pgid = Some(child);
+                        }
                         if let Some(fd) = prev_read {
                             close(fd).unwrap();
                         }
@@ -119,20 +132,24 @@ fn execute_command(commands: &Vec<Command>) {
                             close(w).unwrap();
                         }
                         prev_read = read_end;
-                        setpgid(child, child).unwrap();
-                        tcsetpgrp(STDIN_FILENO, child.into());
-                        loop {
-                            match waitpid(child, None) {
-                                Ok(_) => break,
-                                Err(Errno::EINTR) => continue,
-                                Err(_) => break,
-                            }
-                        }
-                        tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
+                        children.push(child);
                     }
                 }
             }
         }
+    }
+    unsafe {
+        tcsetpgrp(STDIN_FILENO, pgid.unwrap().into());
+    }
+    for child in children {
+        match waitpid(child, None) {
+            Ok(_) => break,
+            Err(Errno::EINTR) => continue,
+            Err(_) => break,
+        }
+    }
+    unsafe {
+        tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
     }
 }
 

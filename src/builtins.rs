@@ -45,7 +45,6 @@ fn exit_builtin() {
 }
 
 fn echo_builtin(command: &Command) -> Option<Cursor<String>> {
-    println!("santhue {:?}", &command.args);
     let data_string = command.args.join(" ") + "\n";
     if command.redirects.len() > 0 {
         match &command.redirects[0] {
