@@ -1,3 +1,4 @@
+mod builtins;
 mod parser;
 
 use nix::{
@@ -12,84 +13,16 @@ use nix::{
     unistd::{Pid, close, execvp, fork, pipe, setpgid},
 };
 
-use crate::parser::{
-    Command, Redirects, is_builtin, locate_command, parse_pipelines, read_and_parse,
+use crate::{
+    builtins::run_builtin,
+    parser::{Command, Redirects, parse_pipelines, read_and_parse},
 };
 use std::{
-    env,
     ffi::CString,
-    fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Cursor, Read, Write, stdout},
+    io::{Write, stdout},
     os::fd::{AsRawFd, OwnedFd},
-    path::PathBuf,
     process,
 };
-
-fn cd_builtin(command: &Command) {
-    let mut path = PathBuf::from(env::home_dir().unwrap());
-    if command.args.len() > 1 {
-        let abspath = &command.args[1].replacen("~", env::home_dir().unwrap().to_str().unwrap(), 1);
-        path = PathBuf::from(abspath);
-    }
-    match env::set_current_dir(&path) {
-        Ok(_) => (),
-        Err(_) => println!("cd: {}: No such file or directory", path.to_str().unwrap()),
-    }
-}
-
-fn exit_builtin() {
-    process::exit(0)
-}
-
-fn echo_builtin(command: &Command) -> Option<Cursor<String>> {
-    println!("santhue {:?}", &command.args);
-    let data_string = command.args.join(" ") + "\n";
-    if command.redirects.len() > 0 {
-        match &command.redirects[0] {
-            Redirects::Output(file) => {
-                let mut file = File::create(file).unwrap();
-                file.write_all(data_string.as_bytes()).unwrap();
-                return None;
-            }
-            Redirects::OutputErr(file) => {
-                let _ = File::create(file).unwrap();
-            }
-            Redirects::Append(file) => {
-                let mut file = OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open(file)
-                    .unwrap();
-                file.write_all(data_string.as_bytes()).unwrap();
-                return None;
-            }
-            Redirects::AppendErr(_) => {}
-        }
-    }
-    return Some(Cursor::new(data_string));
-}
-
-fn type_builtin(command: &Command) {
-    if command.args.len() > 1 {
-        if is_builtin(&command.args[1]) {
-            println!("{} is a shell builtin", command.args[1]);
-            return;
-        }
-        match locate_command(&command.args[1]) {
-            Ok(path) => {
-                println!("{} is {}", &command.args[1], path.to_str().unwrap());
-                return;
-            }
-            Err(_) => (),
-        }
-        println!("{}: not found", command.args[1]);
-    }
-}
-
-fn pwd_builtin() {
-    let path = env::current_dir().unwrap();
-    println!("{}", path.to_str().unwrap())
-}
 
 fn set_redirection(command: &Command) {
     if command.redirects.is_empty() {
@@ -139,6 +72,11 @@ fn set_redirection(command: &Command) {
 
 fn execute_command(commands: &Vec<Command>) {
     let mut prev_read: Option<OwnedFd> = None;
+    if commands.len() == 1 {
+        if let Ok(built_in) = commands[0].is_builtin() {
+            run_builtin(&commands[0], built_in);
+        }
+    }
     for (i, command) in commands.iter().enumerate() {
         let (read_end, write_end) = if i < commands.len() - 1 {
             let (r, w) = pipe().unwrap();
@@ -166,7 +104,12 @@ fn execute_command(commands: &Vec<Command>) {
                         }
 
                         set_redirection(&command);
-                        let _ = execvp(&c, &cargs);
+                        if let Ok(built_in) = command.is_builtin() {
+                            run_builtin(&command, built_in);
+                            process::exit(0);
+                        } else {
+                            let _ = execvp(&c, &cargs);
+                        }
                     }
                     nix::unistd::ForkResult::Parent { child } => {
                         if let Some(fd) = prev_read {
@@ -197,7 +140,7 @@ fn process_command(commands: Vec<Command>) -> Result<(), ()> {
     for command in &commands {
         if !command.is_valid() {
             stdout()
-                .write_all(format!("{}: command not found", &command.program).as_bytes())
+                .write_all(format!("{}: command not found\n", &command.program).as_bytes())
                 .unwrap();
             return Err(());
         }

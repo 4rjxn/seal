@@ -51,20 +51,31 @@ fn is_valid_command(command: &String) -> bool {
     }
 }
 
-pub fn is_builtin(command: &String) -> bool {
+pub enum Builtins {
+    Echo,
+    Exit,
+    Type,
+    Pwd,
+    Cd,
+}
+
+pub fn is_builtin(command: &String) -> Result<Builtins, ()> {
     return match command.as_str() {
-        "exit" => true,
-        "echo" => true,
-        "type" => true,
-        "pwd" => true,
-        "cd" => true,
-        _ => false,
+        "exit" => Ok(Builtins::Exit),
+        "echo" => Ok(Builtins::Echo),
+        "type" => Ok(Builtins::Type),
+        "pwd" => Ok(Builtins::Pwd),
+        "cd" => Ok(Builtins::Cd),
+        _ => Err(()),
     };
 }
 
 impl Command {
     pub fn is_valid(&self) -> bool {
-        is_builtin(&self.program) || is_valid_command(&self.program)
+        is_builtin(&self.program).is_ok() || is_valid_command(&self.program)
+    }
+    pub fn is_builtin(&self) -> Result<Builtins, ()> {
+        is_builtin(&self.program)
     }
 }
 
