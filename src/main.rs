@@ -3,13 +3,13 @@ mod parser;
 use nix::{
     errno::Errno,
     fcntl::{OFlag, open},
-    libc::{STDIN_FILENO, dup2, getpgid, getpid, tcsetpgrp},
+    libc::{STDIN_FILENO, STDOUT_FILENO, dup2, getpgid, getpid, tcsetpgrp},
     sys::{
         signal::{SigHandler, Signal, signal},
         stat::Mode,
         wait::waitpid,
     },
-    unistd::{Pid, execvp, fork, setpgid},
+    unistd::{Pid, close, execvp, fork, pipe, setpgid},
 };
 
 use crate::parser::{
@@ -19,8 +19,8 @@ use std::{
     env,
     ffi::CString,
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Cursor, Read, Write},
-    os::fd::AsRawFd,
+    io::{BufRead, BufReader, Cursor, Read, Write, stdout},
+    os::fd::{AsRawFd, OwnedFd},
     path::PathBuf,
     process,
 };
@@ -137,33 +137,56 @@ fn set_redirection(command: &Command) {
     }
 }
 
-fn execute_command<R: Read>(command: &Command, _data: &mut Option<R>) {
-    unsafe {
-        signal(Signal::SIGTTOU, SigHandler::SigIgn).unwrap();
-        if let Ok(fork_result) = fork() {
-            match fork_result {
-                nix::unistd::ForkResult::Child => {
-                    signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
-                    setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
-                    let c = CString::new(command.program.as_bytes()).unwrap();
-                    let mut cargs = Vec::new();
-                    for arg in &command.args {
-                        cargs.push(CString::new(arg.as_bytes()).unwrap());
-                    }
-                    set_redirection(&command);
-                    execvp(&c, &cargs).expect("baaaaaaaad");
-                }
-                nix::unistd::ForkResult::Parent { child } => {
-                    setpgid(child, child).unwrap();
-                    tcsetpgrp(STDIN_FILENO, child.into());
-                    loop {
-                        match waitpid(child, None) {
-                            Ok(_) => break,
-                            Err(Errno::EINTR) => continue,
-                            Err(_) => break,
+fn execute_command(commands: &Vec<Command>) {
+    let mut prev_read: Option<OwnedFd> = None;
+    for (i, command) in commands.iter().enumerate() {
+        let (read_end, write_end) = if i < commands.len() - 1 {
+            let (r, w) = pipe().unwrap();
+            (Some(r), Some(w))
+        } else {
+            (None, None)
+        };
+        unsafe {
+            signal(Signal::SIGTTOU, SigHandler::SigIgn).unwrap();
+            if let Ok(fork_result) = fork() {
+                match fork_result {
+                    nix::unistd::ForkResult::Child => {
+                        signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+                        setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
+                        let c = CString::new(command.program.as_bytes()).unwrap();
+                        let mut cargs = Vec::new();
+                        for arg in &command.args {
+                            cargs.push(CString::new(arg.as_bytes()).unwrap());
                         }
+                        if let Some(fd) = &prev_read {
+                            dup2(fd.as_raw_fd(), STDIN_FILENO);
+                        }
+                        if let Some(w) = write_end {
+                            dup2(w.as_raw_fd(), STDOUT_FILENO);
+                        }
+
+                        set_redirection(&command);
+                        let _ = execvp(&c, &cargs);
                     }
-                    tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
+                    nix::unistd::ForkResult::Parent { child } => {
+                        if let Some(fd) = prev_read {
+                            close(fd).unwrap();
+                        }
+                        if let Some(w) = write_end {
+                            close(w).unwrap();
+                        }
+                        prev_read = read_end;
+                        setpgid(child, child).unwrap();
+                        tcsetpgrp(STDIN_FILENO, child.into());
+                        loop {
+                            match waitpid(child, None) {
+                                Ok(_) => break,
+                                Err(Errno::EINTR) => continue,
+                                Err(_) => break,
+                            }
+                        }
+                        tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
+                    }
                 }
             }
         }
@@ -171,39 +194,15 @@ fn execute_command<R: Read>(command: &Command, _data: &mut Option<R>) {
 }
 
 fn process_command(commands: Vec<Command>) -> Result<(), ()> {
-    let mut data_buff: Option<Box<dyn Read>> = None;
-    for command in commands {
+    for command in &commands {
         if !command.is_valid() {
-            println!("{}: command not found", command.program);
+            stdout()
+                .write_all(format!("{}: command not found", &command.program).as_bytes())
+                .unwrap();
             return Err(());
         }
-        if command.program == "exit" {
-            exit_builtin()
-        }
-        match command.program.as_str() {
-            "echo" => {
-                if let Some(data) = echo_builtin(&command) {
-                    data_buff = Some(Box::from(data));
-                }
-            }
-            "type" => type_builtin(&command),
-            "cd" => cd_builtin(&command),
-            "pwd" => pwd_builtin(),
-            _ => execute_command(&command, &mut data_buff),
-        }
     }
-    match data_buff {
-        Some(data) => {
-            let mut reader = BufReader::new(data);
-            let mut line = String::new();
-
-            while reader.read_line(&mut line).expect("failed to read line") > 0 {
-                print!("{}", line); // Print the line as it's read
-                line.clear(); // Clear the buffer for the next line
-            }
-        }
-        None => {}
-    }
+    execute_command(&commands);
     Ok(())
 }
 
