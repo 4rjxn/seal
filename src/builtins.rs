@@ -1,12 +1,11 @@
 use std::{
     env,
-    fs::{File, OpenOptions},
-    io::{Cursor, Write},
+    io::{Write, stdout},
     path::PathBuf,
     process,
 };
 
-use crate::parser::{Builtins, Command, Redirects, is_builtin, locate_command};
+use crate::parser::{Builtins, Command, is_builtin, locate_command};
 
 pub fn run_builtin(command: &Command, builtin_type: Builtins) {
     match builtin_type {
@@ -44,31 +43,9 @@ fn exit_builtin() {
     process::exit(0)
 }
 
-fn echo_builtin(command: &Command) -> Option<Cursor<String>> {
+fn echo_builtin(command: &Command) {
     let data_string = command.args.join(" ") + "\n";
-    if command.redirects.len() > 0 {
-        match &command.redirects[0] {
-            Redirects::Output(file) => {
-                let mut file = File::create(file).unwrap();
-                file.write_all(data_string.as_bytes()).unwrap();
-                return None;
-            }
-            Redirects::OutputErr(file) => {
-                let _ = File::create(file).unwrap();
-            }
-            Redirects::Append(file) => {
-                let mut file = OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open(file)
-                    .unwrap();
-                file.write_all(data_string.as_bytes()).unwrap();
-                return None;
-            }
-            Redirects::AppendErr(_) => {}
-        }
-    }
-    return Some(Cursor::new(data_string));
+    stdout().write_all(data_string.as_bytes()).unwrap();
 }
 
 fn type_builtin(command: &Command) {

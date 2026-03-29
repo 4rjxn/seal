@@ -1,5 +1,6 @@
 mod builtins;
 mod parser;
+mod prompt;
 
 use nix::{
     errno::Errno,
@@ -98,21 +99,22 @@ fn execute_command(commands: &Vec<Command>) {
                         } else {
                             setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
                         }
-                        setpgid(Pid::from_raw(0), Pid::from_raw(0)).unwrap();
                         let c = CString::new(command.program.as_bytes()).unwrap();
                         let mut cargs = Vec::new();
                         for arg in &command.args {
                             cargs.push(CString::new(arg.as_bytes()).unwrap());
                         }
-                        if let Some(fd) = &prev_read {
-                            dup2(fd.as_raw_fd(), STDIN_FILENO);
-                            close(fd.as_raw_fd()).unwrap();
+                        if let Some(r) = &prev_read {
+                            dup2(r.as_raw_fd(), STDIN_FILENO);
+                            close(r.as_raw_fd()).unwrap();
                         }
                         if let Some(w) = write_end {
                             dup2(w.as_raw_fd(), STDOUT_FILENO);
                             close(w).unwrap();
                         }
-
+                        if let Some(r) = read_end {
+                            close(r).unwrap();
+                        }
                         set_redirection(&command);
                         if let Ok(built_in) = command.is_builtin() {
                             run_builtin(&command, built_in);
@@ -125,8 +127,8 @@ fn execute_command(commands: &Vec<Command>) {
                         if pgid.is_none() {
                             pgid = Some(child);
                         }
-                        if let Some(fd) = prev_read {
-                            close(fd).unwrap();
+                        if let Some(r) = prev_read {
+                            close(r).unwrap();
                         }
                         if let Some(w) = write_end {
                             close(w).unwrap();
@@ -141,11 +143,13 @@ fn execute_command(commands: &Vec<Command>) {
     unsafe {
         tcsetpgrp(STDIN_FILENO, pgid.unwrap().into());
     }
-    for child in children {
-        match waitpid(child, None) {
-            Ok(_) => break,
-            Err(Errno::EINTR) => continue,
-            Err(_) => break,
+    for child in children.iter().rev() {
+        loop {
+            match waitpid(child.to_owned(), None) {
+                Ok(_) => break,
+                Err(Errno::EINTR) => continue,
+                Err(_) => break,
+            }
         }
     }
     unsafe {
@@ -167,6 +171,11 @@ fn process_command(commands: Vec<Command>) -> Result<(), ()> {
 }
 
 fn main() {
+    //unsafe {
+    //    let pid = getpid();
+    //    setpgid(Pid::from_raw(pid), Pid::from_raw(pid)).unwrap();
+    //    tcsetpgrp(STDIN_FILENO, );
+    //}
     loop {
         let command = read_and_parse();
         let pipeline = parse_pipelines(command).unwrap();

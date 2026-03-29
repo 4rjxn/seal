@@ -3,6 +3,8 @@ use std::{env, path::PathBuf};
 use is_executable::IsExecutable;
 use rustyline::{DefaultEditor, error::ReadlineError};
 
+use crate::prompt::set_prompt;
+
 #[derive(Debug)]
 pub enum Tokens {
     Word(String),
@@ -99,7 +101,7 @@ pub fn read_and_parse() -> Vec<Tokens> {
     let mut rl = DefaultEditor::new().unwrap();
     loop {
         let command_input;
-        let readline = rl.readline(String::from(">> ").as_str());
+        let readline = rl.readline(set_prompt().as_str());
         match readline {
             Ok(line) => {
                 command_input = line;
