@@ -30,7 +30,7 @@ Seal is a lightweight, Unix-like shell written in Rust. It provides a familiar c
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/seal.git
+   git clone https://github.com/4rjxn/seal.git
    cd seal
    ```
 
