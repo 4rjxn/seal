@@ -51,17 +51,25 @@ fn echo_builtin(command: &Command) {
 fn type_builtin(command: &Command) {
     if command.args.len() > 1 {
         if is_builtin(&command.args[1]).is_ok() {
-            println!("{} is a shell builtin", command.args[1]);
+            stdout()
+                .write_all(format!("{} is a shell builtin\n", command.args[1]).as_bytes())
+                .unwrap();
             return;
         }
         match locate_command(&command.args[1]) {
             Ok(path) => {
-                println!("{} is {}", &command.args[1], path.to_str().unwrap());
+                stdout()
+                    .write_all(
+                        format!("{} is {}\n", &command.args[1], path.to_str().unwrap()).as_bytes(),
+                    )
+                    .unwrap();
                 return;
             }
             Err(_) => (),
         }
-        println!("{}: not found", command.args[1]);
+        stdout()
+            .write_all(format!("{}: not found\n", command.args[1]).as_bytes())
+            .unwrap();
     }
 }
 

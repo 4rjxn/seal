@@ -97,7 +97,7 @@ fn string_to_token(val: &String) -> Tokens {
     }
 }
 
-pub fn read_and_parse() -> Vec<Tokens> {
+pub fn read_and_parse() -> Option<Vec<Tokens>> {
     let mut rl = DefaultEditor::new().unwrap();
     loop {
         let command_input;
@@ -109,7 +109,9 @@ pub fn read_and_parse() -> Vec<Tokens> {
             Err(ReadlineError::Interrupted) => {
                 continue;
             }
-            Err(ReadlineError::Eof) => continue,
+            Err(ReadlineError::Eof) => {
+                return None;
+            }
             Err(err) => {
                 eprintln!("Error: {:?}", err);
                 continue;
@@ -167,7 +169,7 @@ pub fn read_and_parse() -> Vec<Tokens> {
         if !word.is_empty() {
             tokens.push(string_to_token(&word));
         }
-        return tokens;
+        return Some(tokens);
     }
 }
 

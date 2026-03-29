@@ -171,14 +171,13 @@ fn process_command(commands: Vec<Command>) -> Result<(), ()> {
 }
 
 fn main() {
-    //unsafe {
-    //    let pid = getpid();
-    //    setpgid(Pid::from_raw(pid), Pid::from_raw(pid)).unwrap();
-    //    tcsetpgrp(STDIN_FILENO, );
-    //}
     loop {
-        let command = read_and_parse();
-        let pipeline = parse_pipelines(command).unwrap();
-        let _ = process_command(pipeline.commands);
+        match read_and_parse() {
+            Some(command) => {
+                let pipeline = parse_pipelines(command).unwrap();
+                let _ = process_command(pipeline.commands);
+            }
+            None => break,
+        }
     }
 }
