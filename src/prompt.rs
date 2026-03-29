@@ -1,8 +1,16 @@
-use std::env;
+use nix::unistd::{User, gethostname, getuid};
+use regex::Regex;
 
 pub fn set_prompt() -> String {
-    let dir = env::current_dir().unwrap();
-    let dir = dir.to_str().unwrap().replacen("/home/arjun", "~", 1);
-    let prompt = format!("\n---- parzival ᛟ oasis ᛯ {} ᚠ\n ᛝ ", dir);
+    let user = User::from_uid(getuid()).unwrap().unwrap();
+    let host = gethostname().unwrap();
+    let re = Regex::new(r"/\w+/\w+").unwrap();
+    let dir = re.replace(user.dir.to_str().unwrap(), "~");
+    let prompt = format!(
+        "\n---- {} ᛟ {} ᛯ {} ᚠ\n ᛝ ",
+        user.name,
+        host.to_str().unwrap(),
+        dir
+    );
     prompt
 }
