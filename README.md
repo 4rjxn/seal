@@ -28,6 +28,11 @@ Seal is a lightweight, Unix-like shell written in Rust. It provides a familiar c
 
 ### Installation
 
+0. direct installation (build from source).
+   ```bash
+   curl -fSSL https://raw.githubusercontent.com/4rjxn/seal/refs/heads/trunk/invoke.sh | sh
+   ```
+
 1. Clone the repository:
    ```bash
    git clone https://github.com/4rjxn/seal.git
