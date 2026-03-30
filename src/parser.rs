@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf};
 
 use is_executable::IsExecutable;
-use rustyline::{DefaultEditor, error::ReadlineError};
+use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 
 use crate::prompt::set_prompt;
 
@@ -98,12 +98,14 @@ fn string_to_token(val: &String) -> Tokens {
 }
 
 pub fn read_and_parse() -> Option<Vec<Tokens>> {
-    let mut rl = DefaultEditor::new().unwrap();
+    let mut rl = Editor::<(), DefaultHistory>::new().unwrap();
+    rl.load_history("/home/arjun/.seal_history").unwrap();
     loop {
         let command_input;
         let readline = rl.readline(set_prompt().as_str());
         match readline {
             Ok(line) => {
+                rl.add_history_entry(line.as_str()).unwrap();
                 command_input = line;
             }
             Err(ReadlineError::Interrupted) => {
@@ -117,6 +119,7 @@ pub fn read_and_parse() -> Option<Vec<Tokens>> {
                 continue;
             }
         }
+        rl.save_history("/home/arjun/.seal_history").unwrap();
         let mut tokens = Vec::new();
         let mut word = String::new();
         let mut is_quote = false;
