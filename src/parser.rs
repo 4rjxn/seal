@@ -15,7 +15,7 @@ pub enum Tokens {
     AppendErr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Redirects {
     //Input(String),
     Output(String),
@@ -24,7 +24,7 @@ pub enum Redirects {
     AppendErr(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Command {
     pub program: String,
     pub args: Vec<String>,
@@ -59,6 +59,7 @@ pub enum Builtins {
     Type,
     Pwd,
     Cd,
+    Fg,
 }
 
 pub fn is_builtin(command: &String) -> Result<Builtins, ()> {
@@ -68,6 +69,7 @@ pub fn is_builtin(command: &String) -> Result<Builtins, ()> {
         "type" => Ok(Builtins::Type),
         "pwd" => Ok(Builtins::Pwd),
         "cd" => Ok(Builtins::Cd),
+        "fg" => Ok(Builtins::Fg),
         _ => Err(()),
     };
 }

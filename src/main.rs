@@ -1,22 +1,24 @@
 mod builtins;
+mod models;
 mod parser;
 mod prompt;
+mod wait_process;
 
 use nix::{
-    errno::Errno,
     fcntl::{OFlag, open},
     libc::{STDIN_FILENO, STDOUT_FILENO, dup2, getpgid, getpid, tcsetpgrp},
     sys::{
         signal::{SigHandler, Signal, signal},
         stat::Mode,
-        wait::waitpid,
     },
     unistd::{Pid, close, execvp, fork, pipe, setpgid},
 };
 
 use crate::{
     builtins::run_builtin,
+    models::{Job, ShellState},
     parser::{Command, Redirects, parse_pipelines, read_and_parse},
+    wait_process::wait_for_process,
 };
 use std::{
     ffi::CString,
@@ -71,11 +73,11 @@ fn set_redirection(command: &Command) {
     }
 }
 
-fn execute_command(commands: &Vec<Command>) {
+fn execute_command(commands: &Vec<Command>, state: &mut ShellState) {
     let mut prev_read: Option<OwnedFd> = None;
     if commands.len() == 1 {
         if let Ok(built_in) = commands[0].is_builtin() {
-            run_builtin(&commands[0], built_in);
+            run_builtin(&commands[0], state, built_in);
             return;
         }
     }
@@ -94,6 +96,7 @@ fn execute_command(commands: &Vec<Command>) {
                 match fork_result {
                     nix::unistd::ForkResult::Child => {
                         signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+                        signal(Signal::SIGTSTP, SigHandler::SigDfl).unwrap();
                         if let Some(pgid) = pgid {
                             setpgid(Pid::from_raw(0), pgid).unwrap();
                         } else {
@@ -117,7 +120,7 @@ fn execute_command(commands: &Vec<Command>) {
                         }
                         set_redirection(&command);
                         if let Ok(built_in) = command.is_builtin() {
-                            run_builtin(&command, built_in);
+                            run_builtin(&command, state, built_in);
                             process::exit(0);
                         } else {
                             let _ = execvp(&c, &cargs);
@@ -143,21 +146,17 @@ fn execute_command(commands: &Vec<Command>) {
     unsafe {
         tcsetpgrp(STDIN_FILENO, pgid.unwrap().into());
     }
-    for child in children.iter().rev() {
-        loop {
-            match waitpid(child.to_owned(), None) {
-                Ok(_) => break,
-                Err(Errno::EINTR) => continue,
-                Err(_) => break,
-            }
-        }
-    }
+    let job = Job {
+        pgid: Pid::from_raw(pgid.unwrap().into()),
+        command: commands.last().unwrap().clone(),
+    };
+    wait_for_process(job, state);
     unsafe {
         tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
     }
 }
 
-fn process_command(commands: Vec<Command>) -> Result<(), ()> {
+fn process_command(commands: Vec<Command>, state: &mut ShellState) -> Result<(), ()> {
     for command in &commands {
         if !command.is_valid() {
             stdout()
@@ -166,16 +165,20 @@ fn process_command(commands: Vec<Command>) -> Result<(), ()> {
             return Err(());
         }
     }
-    execute_command(&commands);
+    execute_command(&commands, state);
     Ok(())
 }
 
 fn main() {
+    let mut state = ShellState { jobs: vec![] };
+    unsafe {
+        signal(Signal::SIGTSTP, SigHandler::SigIgn).unwrap();
+    }
     loop {
         match read_and_parse() {
             Some(command) => {
                 let pipeline = parse_pipelines(command).unwrap();
-                let _ = process_command(pipeline.commands);
+                let _ = process_command(pipeline.commands, &mut state);
             }
             None => break,
         }

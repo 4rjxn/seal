@@ -5,9 +5,15 @@ use std::{
     process,
 };
 
-use crate::parser::{Builtins, Command, is_builtin, locate_command};
+use nix::libc::{SIGCONT, STDIN_FILENO, getpgid, getpid, kill, tcsetpgrp};
 
-pub fn run_builtin(command: &Command, builtin_type: Builtins) {
+use crate::{
+    models::ShellState,
+    parser::{Builtins, Command, is_builtin, locate_command},
+    wait_process::wait_for_process,
+};
+
+pub fn run_builtin(command: &Command, state: &mut ShellState, builtin_type: Builtins) {
     match builtin_type {
         Builtins::Echo => {
             echo_builtin(command);
@@ -24,6 +30,21 @@ pub fn run_builtin(command: &Command, builtin_type: Builtins) {
         Builtins::Cd => {
             cd_builtin(command);
         }
+        Builtins::Fg => {
+            fg_builtin(state);
+        }
+    }
+}
+
+fn fg_builtin(state: &mut ShellState) {
+    match state.jobs.pop() {
+        Some(job) => unsafe {
+            tcsetpgrp(STDIN_FILENO, job.pgid.as_raw());
+            kill(job.pgid.as_raw(), SIGCONT);
+            wait_for_process(job, state);
+            tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
+        },
+        None => return,
     }
 }
 
