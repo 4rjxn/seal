@@ -1,22 +1,27 @@
 use std::env;
 use std::path::PathBuf;
 
-use rustyline::{error::ReadlineError, history::DefaultHistory, Editor};
+use rustyline::completion::FilenameCompleter;
+use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 
 use crate::error::ShellResult;
+use crate::file_completion::FileCompletion;
 use crate::lexer::tokenize;
 use crate::models::Tokens;
 use crate::prompt::set_prompt;
 
 pub struct Repl {
-    editor: Editor<(), DefaultHistory>,
+    editor: Editor<FileCompletion, DefaultHistory>,
     history_path: PathBuf,
 }
 
 impl Repl {
     pub fn new() -> ShellResult<Self> {
-        let mut editor = Editor::<(), DefaultHistory>::new()
+        let mut editor = Editor::<FileCompletion, DefaultHistory>::new()
             .map_err(|e| crate::error::ShellError::ReadlineError(e.to_string()))?;
+        editor.set_helper(Some(FileCompletion {
+            completer: FilenameCompleter::new(),
+        }));
 
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let history_path = PathBuf::from(home).join(".seal_history");

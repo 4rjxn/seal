@@ -1,6 +1,7 @@
 mod builtins;
 mod error;
 mod execution;
+mod file_completion;
 mod lexer;
 mod models;
 mod parser;
@@ -9,7 +10,7 @@ mod redirection;
 mod repl;
 mod wait_process;
 
-use nix::sys::signal::{signal, SigHandler, Signal};
+use nix::sys::signal::{SigHandler, Signal, signal};
 
 use crate::{
     error::ShellResult,
@@ -18,7 +19,7 @@ use crate::{
     parser::parse_pipelines,
     repl::Repl,
 };
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 
 fn process_command(commands: Vec<Command>, state: &mut ShellState) -> ShellResult<()> {
     for command in &commands {
