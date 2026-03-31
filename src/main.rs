@@ -1,27 +1,34 @@
 mod builtins;
+mod error;
 mod execution;
+mod lexer;
 mod models;
 mod parser;
 mod prompt;
 mod redirection;
+mod repl;
 mod wait_process;
 
-use nix::sys::signal::{SigHandler, Signal, signal};
+use nix::sys::signal::{signal, SigHandler, Signal};
 
 use crate::{
+    error::ShellResult,
     execution::execute_command,
     models::{Command, ShellState},
-    parser::{parse_pipelines, read_and_parse},
+    parser::parse_pipelines,
+    repl::Repl,
 };
-use std::io::{Write, stdout};
+use std::io::{stdout, Write};
 
-fn process_command(commands: Vec<Command>, state: &mut ShellState) -> Result<(), ()> {
+fn process_command(commands: Vec<Command>, state: &mut ShellState) -> ShellResult<()> {
     for command in &commands {
         if !command.is_valid() {
             stdout()
                 .write_all(format!("{}: command not found\n", &command.program).as_bytes())
                 .unwrap();
-            return Err(());
+            return Err(crate::error::ShellError::CommandNotFound(
+                command.program.clone(),
+            ));
         }
     }
     execute_command(&commands, state);
@@ -30,14 +37,17 @@ fn process_command(commands: Vec<Command>, state: &mut ShellState) -> Result<(),
 
 fn main() {
     let mut state = ShellState { jobs: vec![] };
+    let mut repl = Repl::new().expect("Failed to initialize REPL");
+
     unsafe {
         signal(Signal::SIGTSTP, SigHandler::SigIgn).unwrap();
     }
     loop {
-        match read_and_parse() {
-            Some(command) => {
-                let pipeline = parse_pipelines(command).unwrap();
-                let _ = process_command(pipeline.commands, &mut state);
+        match repl.read_and_parse() {
+            Some(tokens) => {
+                if let Some(pipeline) = parse_pipelines(tokens) {
+                    let _ = process_command(pipeline.commands, &mut state);
+                }
             }
             None => break,
         }

@@ -1,3 +1,4 @@
+use crate::error::ShellResult;
 use crate::parser::is_valid_command;
 use nix::unistd::Pid;
 
@@ -55,7 +56,7 @@ impl Command {
     pub fn is_valid(&self) -> bool {
         is_builtin(&self.program).is_ok() || is_valid_command(&self.program)
     }
-    pub fn is_builtin(&self) -> Result<Builtins, ()> {
+    pub fn is_builtin(&self) -> ShellResult<Builtins> {
         is_builtin(&self.program)
     }
 }

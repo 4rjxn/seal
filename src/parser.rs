@@ -1,16 +1,16 @@
 use std::{env, path::PathBuf};
 
 use is_executable::IsExecutable;
-use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 
+use crate::error::ShellError;
+use crate::error::ShellResult;
 use crate::models::Builtins;
 use crate::models::Command;
 use crate::models::Pipeline;
 use crate::models::Redirects;
 use crate::models::Tokens;
-use crate::prompt::set_prompt;
 
-pub fn locate_command(command: &String) -> Result<PathBuf, ()> {
+pub fn locate_command(command: &String) -> ShellResult<PathBuf> {
     match env::var_os("PATH") {
         Some(paths) => {
             for mut path in env::split_paths(&paths) {
@@ -19,118 +19,25 @@ pub fn locate_command(command: &String) -> Result<PathBuf, ()> {
                     return Ok(path);
                 }
             }
-            return Err(());
+            return Err(ShellError::CommandNotFound(command.clone()));
         }
-        None => Err(()),
+        None => Err(ShellError::CommandNotFound(command.clone())),
     }
 }
 
 pub fn is_valid_command(command: &String) -> bool {
-    match locate_command(command) {
-        Ok(_) => return true,
-        Err(_) => return false,
-    }
+    locate_command(command).is_ok()
 }
 
-pub fn is_builtin(command: &String) -> Result<Builtins, ()> {
-    return match command.as_str() {
+pub fn is_builtin(command: &String) -> ShellResult<Builtins> {
+    match command.as_str() {
         "exit" => Ok(Builtins::Exit),
         "echo" => Ok(Builtins::Echo),
         "type" => Ok(Builtins::Type),
         "pwd" => Ok(Builtins::Pwd),
         "cd" => Ok(Builtins::Cd),
         "fg" => Ok(Builtins::Fg),
-        _ => Err(()),
-    };
-}
-
-fn string_to_token(val: &String) -> Tokens {
-    match val.as_str() {
-        "2>" => Tokens::OutputErr,
-        "2>>" => Tokens::AppendErr,
-        ">>" | "1>>" => Tokens::Append,
-        ">" | "1>" => Tokens::Output,
-        "|" => Tokens::Pipe,
-        _ => Tokens::Word(val.to_owned()),
-    }
-}
-
-pub fn read_and_parse() -> Option<Vec<Tokens>> {
-    let mut rl = Editor::<(), DefaultHistory>::new().unwrap();
-    rl.load_history("/home/arjun/.seal_history").unwrap();
-    loop {
-        let command_input;
-        let readline = rl.readline(set_prompt().as_str());
-        match readline {
-            Ok(line) => {
-                rl.add_history_entry(line.as_str()).unwrap();
-                command_input = line;
-            }
-            Err(ReadlineError::Interrupted) => {
-                continue;
-            }
-            Err(ReadlineError::Eof) => {
-                return None;
-            }
-            Err(err) => {
-                eprintln!("Error: {:?}", err);
-                continue;
-            }
-        }
-        rl.save_history("/home/arjun/.seal_history").unwrap();
-        let mut tokens = Vec::new();
-        let mut word = String::new();
-        let mut is_quote = false;
-        let mut is_double_quote = false;
-        let mut is_black_slash = false;
-        if command_input.is_empty() {
-            continue;
-        }
-        for char in command_input.trim().chars() {
-            if is_black_slash {
-                word.push(char);
-                is_black_slash = !is_black_slash;
-                continue;
-            }
-            match char {
-                '\\' => {
-                    if !is_quote {
-                        is_black_slash = !is_black_slash;
-                        continue;
-                    }
-                    word.push(char);
-                }
-                '"' => {
-                    if !is_quote {
-                        is_double_quote = !is_double_quote;
-                        continue;
-                    }
-                    word.push(char);
-                }
-                '\'' => {
-                    if !is_double_quote {
-                        is_quote = !is_quote;
-                        continue;
-                    }
-                    word.push(char);
-                }
-                ' ' => {
-                    if is_quote || is_double_quote {
-                        word.push(char);
-                        continue;
-                    }
-                    if !word.is_empty() {
-                        tokens.push(string_to_token(&word));
-                        word = String::new();
-                    }
-                }
-                _ => word.push(char),
-            }
-        }
-        if !word.is_empty() {
-            tokens.push(string_to_token(&word));
-        }
-        return Some(tokens);
+        _ => Err(ShellError::InvalidBuiltin(command.clone())),
     }
 }
 
@@ -206,4 +113,54 @@ pub fn parse_pipelines(tokens: Vec<Tokens>) -> Option<Pipeline> {
         }
     }
     Some(Pipeline { commands })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Tokens;
+
+    #[test]
+    fn test_parse_simple_command() {
+        let tokens = vec![
+            Tokens::Word("ls".to_string()),
+            Tokens::Word("-l".to_string()),
+        ];
+        let pipeline = parse_pipelines(tokens).unwrap();
+        assert_eq!(pipeline.commands.len(), 1);
+        assert!(pipeline.commands[0].program.ends_with("ls"));
+        assert_eq!(pipeline.commands[0].args, vec!["ls", "-l"]);
+    }
+
+    #[test]
+    fn test_parse_pipe() {
+        let tokens = vec![
+            Tokens::Word("ls".to_string()),
+            Tokens::Pipe,
+            Tokens::Word("grep".to_string()),
+            Tokens::Word("foo".to_string()),
+        ];
+        let pipeline = parse_pipelines(tokens).unwrap();
+        assert_eq!(pipeline.commands.len(), 2);
+        assert!(pipeline.commands[0].program.ends_with("ls"));
+        assert!(pipeline.commands[1].program.ends_with("grep"));
+    }
+
+    #[test]
+    fn test_parse_redirection() {
+        let tokens = vec![
+            Tokens::Word("echo".to_string()),
+            Tokens::Word("hello".to_string()),
+            Tokens::Output,
+            Tokens::Word("out.txt".to_string()),
+        ];
+        let pipeline = parse_pipelines(tokens).unwrap();
+        assert_eq!(pipeline.commands.len(), 1);
+        assert_eq!(pipeline.commands[0].redirects.len(), 1);
+        if let crate::models::Redirects::Output(ref f) = pipeline.commands[0].redirects[0] {
+            assert_eq!(f, "out.txt");
+        } else {
+            panic!("Expected Output");
+        }
+    }
 }

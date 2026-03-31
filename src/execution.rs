@@ -1,6 +1,6 @@
 use nix::{
-    libc::{STDOUT_FILENO, dup2, getpgid, getpid, tcsetpgrp},
-    sys::signal::{SigHandler, Signal, signal},
+    libc::{dup2, getpgid, getpid, tcsetpgrp, STDOUT_FILENO},
+    sys::signal::{signal, SigHandler, Signal},
     unistd::{close, execvp, fork},
 };
 use std::{
@@ -11,7 +11,7 @@ use std::{
 
 use nix::{
     libc::STDIN_FILENO,
-    unistd::{Pid, pipe, setpgid},
+    unistd::{pipe, setpgid, Pid},
 };
 
 use crate::{
@@ -25,7 +25,7 @@ pub fn execute_command(commands: &Vec<Command>, state: &mut ShellState) {
     let mut prev_read: Option<OwnedFd> = None;
     if commands.len() == 1 {
         if let Ok(built_in) = commands[0].is_builtin() {
-            run_builtin(&commands[0], state, built_in);
+            let _ = run_builtin(&commands[0], state, built_in);
             return;
         }
     }
@@ -66,9 +66,12 @@ pub fn execute_command(commands: &Vec<Command>, state: &mut ShellState) {
                         if let Some(r) = read_end {
                             close(r).unwrap();
                         }
-                        set_redirection(&command);
+                        if let Err(e) = set_redirection(&command) {
+                            eprintln!("redirection error: {}", e);
+                            process::exit(1);
+                        }
                         if let Ok(built_in) = command.is_builtin() {
-                            run_builtin(&command, state, built_in);
+                            let _ = run_builtin(&command, state, built_in);
                             process::exit(0);
                         } else {
                             let _ = execvp(&c, &cargs);

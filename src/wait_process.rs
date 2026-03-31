@@ -1,6 +1,6 @@
 use nix::{
     errno::Errno,
-    sys::wait::{WaitPidFlag, WaitStatus, waitpid},
+    sys::wait::{waitpid, WaitPidFlag, WaitStatus},
 };
 
 use crate::models::{Job, ShellState};
