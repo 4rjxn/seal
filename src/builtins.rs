@@ -1,3 +1,4 @@
+use crate::parser::{is_builtin, locate_command};
 use std::{
     env,
     io::{Write, stdout},
@@ -8,8 +9,7 @@ use std::{
 use nix::libc::{SIGCONT, STDIN_FILENO, getpgid, getpid, kill, tcsetpgrp};
 
 use crate::{
-    models::ShellState,
-    parser::{Builtins, Command, is_builtin, locate_command},
+    models::{Builtins, Command, ShellState},
     wait_process::wait_for_process,
 };
 

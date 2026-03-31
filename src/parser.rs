@@ -3,33 +3,12 @@ use std::{env, path::PathBuf};
 use is_executable::IsExecutable;
 use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 
+use crate::models::Builtins;
+use crate::models::Command;
+use crate::models::Pipeline;
+use crate::models::Redirects;
+use crate::models::Tokens;
 use crate::prompt::set_prompt;
-
-#[derive(Debug)]
-pub enum Tokens {
-    Word(String),
-    Pipe,
-    Output,
-    Append,
-    OutputErr,
-    AppendErr,
-}
-
-#[derive(Debug, Clone)]
-pub enum Redirects {
-    //Input(String),
-    Output(String),
-    OutputErr(String),
-    Append(String),
-    AppendErr(String),
-}
-
-#[derive(Debug, Clone)]
-pub struct Command {
-    pub program: String,
-    pub args: Vec<String>,
-    pub redirects: Vec<Redirects>,
-}
 
 pub fn locate_command(command: &String) -> Result<PathBuf, ()> {
     match env::var_os("PATH") {
@@ -46,20 +25,11 @@ pub fn locate_command(command: &String) -> Result<PathBuf, ()> {
     }
 }
 
-fn is_valid_command(command: &String) -> bool {
+pub fn is_valid_command(command: &String) -> bool {
     match locate_command(command) {
         Ok(_) => return true,
         Err(_) => return false,
     }
-}
-
-pub enum Builtins {
-    Echo,
-    Exit,
-    Type,
-    Pwd,
-    Cd,
-    Fg,
 }
 
 pub fn is_builtin(command: &String) -> Result<Builtins, ()> {
@@ -72,20 +42,6 @@ pub fn is_builtin(command: &String) -> Result<Builtins, ()> {
         "fg" => Ok(Builtins::Fg),
         _ => Err(()),
     };
-}
-
-impl Command {
-    pub fn is_valid(&self) -> bool {
-        is_builtin(&self.program).is_ok() || is_valid_command(&self.program)
-    }
-    pub fn is_builtin(&self) -> Result<Builtins, ()> {
-        is_builtin(&self.program)
-    }
-}
-
-#[derive(Debug)]
-pub struct Pipeline {
-    pub commands: Vec<Command>,
 }
 
 fn string_to_token(val: &String) -> Tokens {
