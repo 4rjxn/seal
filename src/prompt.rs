@@ -1,7 +1,13 @@
 use std::env;
 
-use nix::unistd::{gethostname, getuid, User};
+use nix::unistd::{User, gethostname, getuid};
 
+fn red(text: &str) -> String {
+    format!("\x1b[31m{}\x1b[0m", text)
+}
+fn bright_red(text: &str) -> String {
+    format!("\x1b[91m{}\x1b[0m", text)
+}
 pub fn set_prompt() -> String {
     let user = User::from_uid(getuid())
         .ok()
@@ -22,5 +28,11 @@ pub fn set_prompt() -> String {
         dir_str.to_string()
     };
 
-    format!("\n---- {} ᛟ {} ᛯ {} ᚠ\n ᛝ ", user, host, dir)
+    format!(
+        "\n---- {} ᛟ {} ᛯ {} ᚠ\n {} ",
+        red(&user),
+        host,
+        dir,
+        bright_red("ᛝ")
+    )
 }

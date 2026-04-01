@@ -2,12 +2,12 @@ use crate::error::ShellResult;
 use crate::parser::{is_builtin, locate_command};
 use std::{
     env,
-    io::{stdout, Write},
+    io::{Write, stdout},
     path::PathBuf,
     process,
 };
 
-use nix::libc::{getpgid, getpid, kill, tcsetpgrp, SIGCONT, STDIN_FILENO};
+use nix::libc::{SIGCONT, STDIN_FILENO, getpgid, getpid, kill, tcsetpgrp};
 
 use crate::{
     models::{Builtins, Command, ShellState},
@@ -50,7 +50,9 @@ fn fg_builtin(state: &mut ShellState) {
             wait_for_process(job, state);
             tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
         },
-        None => return,
+        None => {
+            println!("no background process.");
+        }
     }
 }
 

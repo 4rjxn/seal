@@ -22,7 +22,6 @@ impl Repl {
         editor.set_helper(Some(FileCompletion {
             completer: FilenameCompleter::new(),
         }));
-
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let history_path = PathBuf::from(home).join(".seal_history");
 
