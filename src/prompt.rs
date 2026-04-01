@@ -28,11 +28,21 @@ pub fn set_prompt() -> String {
         dir_str.to_string()
     };
 
-    format!(
-        "\n---- {} ᛟ {} ᛯ {} ᚠ\n {} ",
-        red(&user),
-        host,
-        dir,
-        bright_red("ᛝ")
-    )
+    if cfg!(debug_assertions) {
+        format!(
+            "\n[debug] {} ᛟ {} ᛯ {} ᚠ\n {} ",
+            red(&user),
+            host,
+            dir,
+            bright_red("ᛝ")
+        )
+    } else {
+        format!(
+            "\n---- {} ᛟ {} ᛯ {} ᚠ\n {} ",
+            red(&user),
+            host,
+            dir,
+            bright_red("ᛝ")
+        )
+    }
 }
