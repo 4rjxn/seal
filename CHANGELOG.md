@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-01
+
+### Added
+- **File Completion**: Integrated filename completion using `rustyline`.
+- **Job Control**: Added background task management and the `fg` builtin.
+- **Improved Prompt**: Dynamic prompt showing user, hostname, and current directory with color coding.
+- **Installation Script**: Added `invoke.sh` for easier installation.
+- **Error Handling**: Comprehensive error handling using the `thiserror` crate.
+
+### Changed
+- **Modularization**: Refactored the codebase into dedicated modules (`lexer`, `parser`, `execution`, `redirection`, `repl`, etc.) for better maintainability and readability.
+- **Piping & Redirection**: Improved robustness of command piping and I/O redirection.
+- **History Management**: Better integration and persistence of command history.
+
+### Fixed
+- Fixed various bugs in pipeline execution and signal handling.
+- Corrected behavior of `echo` builtin to properly handle arguments.
+
 ## [0.1.0] - 2026-03-29
 
 ### Added
