@@ -11,6 +11,9 @@ use crate::models::Redirects;
 use crate::models::Tokens;
 
 pub fn locate_command(command: &String) -> ShellResult<PathBuf> {
+    if let Ok(_) = is_builtin(command) {
+        return Ok(PathBuf::from(command));
+    }
     match env::var_os("PATH") {
         Some(paths) => {
             for mut path in env::split_paths(&paths) {

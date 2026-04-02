@@ -1,7 +1,7 @@
 use std::os::fd::AsRawFd;
 
 use nix::{
-    fcntl::{open, OFlag},
+    fcntl::{OFlag, open},
     libc::dup2,
     sys::stat::Mode,
 };

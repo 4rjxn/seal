@@ -1,5 +1,5 @@
 use nix::{
-    libc::{STDOUT_FILENO, dup2, getpgid, getpid, tcsetpgrp},
+    libc::{STDOUT_FILENO, dup, dup2},
     sys::signal::{SigHandler, Signal, signal},
     unistd::{close, execvp, fork},
 };
@@ -25,7 +25,14 @@ pub fn execute_command(commands: &Vec<Command>, state: &mut ShellState) {
     let mut prev_read: Option<OwnedFd> = None;
     if commands.len() == 1 {
         if let Ok(built_in) = commands[0].is_builtin() {
-            let _ = run_builtin(&commands[0], state, built_in);
+            unsafe {
+                //saving current file discriptors.
+                let file_d = dup(1);
+                let _ = set_redirection(&commands[0]);
+                let _ = run_builtin(&commands[0], state, built_in);
+                //restoring saved file discriptors.
+                dup2(file_d, 1);
+            }
             return;
         }
     }
@@ -94,16 +101,10 @@ pub fn execute_command(commands: &Vec<Command>, state: &mut ShellState) {
             }
         }
     }
-    unsafe {
-        tcsetpgrp(STDIN_FILENO, pgid.unwrap().into());
-    }
     let job = Job {
         pgid: Pid::from_raw(pgid.unwrap().into()),
         command: commands.last().unwrap().clone(),
         childrens: children.to_owned(),
     };
     wait_for_process(job, state);
-    unsafe {
-        tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
-    }
 }
