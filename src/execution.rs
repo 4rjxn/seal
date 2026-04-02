@@ -1,6 +1,6 @@
 use nix::{
-    libc::{dup2, getpgid, getpid, tcsetpgrp, STDOUT_FILENO},
-    sys::signal::{signal, SigHandler, Signal},
+    libc::{STDOUT_FILENO, dup2, getpgid, getpid, tcsetpgrp},
+    sys::signal::{SigHandler, Signal, signal},
     unistd::{close, execvp, fork},
 };
 use std::{
@@ -11,7 +11,7 @@ use std::{
 
 use nix::{
     libc::STDIN_FILENO,
-    unistd::{pipe, setpgid, Pid},
+    unistd::{Pid, pipe, setpgid},
 };
 
 use crate::{
@@ -100,6 +100,7 @@ pub fn execute_command(commands: &Vec<Command>, state: &mut ShellState) {
     let job = Job {
         pgid: Pid::from_raw(pgid.unwrap().into()),
         command: commands.last().unwrap().clone(),
+        childrens: children.to_owned(),
     };
     wait_for_process(job, state);
     unsafe {

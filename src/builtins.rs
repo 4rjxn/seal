@@ -7,7 +7,7 @@ use std::{
     process,
 };
 
-use nix::libc::{SIGCONT, STDIN_FILENO, getpgid, getpid, kill, tcsetpgrp};
+use nix::libc::{SIGCONT, STDIN_FILENO, getpgid, getpid, killpg, tcsetpgrp};
 
 use crate::{
     models::{Builtins, Command, ShellState},
@@ -46,7 +46,7 @@ fn fg_builtin(state: &mut ShellState) {
     match state.jobs.pop() {
         Some(job) => unsafe {
             tcsetpgrp(STDIN_FILENO, job.pgid.as_raw());
-            kill(job.pgid.as_raw(), SIGCONT);
+            killpg(job.pgid.as_raw(), SIGCONT);
             wait_for_process(job, state);
             tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
         },

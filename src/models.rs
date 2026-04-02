@@ -24,6 +24,7 @@ pub struct ShellState {
 pub struct Job {
     pub pgid: Pid,
     pub command: Command,
+    pub childrens: Vec<Pid>,
 }
 
 #[derive(Debug)]
