@@ -9,15 +9,7 @@ use rustyline::{
     validate::Validator,
 };
 
-trait StrExtend {
-    fn escape_spaces(&self) -> String;
-}
-
-impl StrExtend for str {
-    fn escape_spaces(&self) -> String {
-        self.replace(" ", "\\ ")
-    }
-}
+use crate::traits::EscapeTrait;
 
 pub struct FileCompletion {}
 

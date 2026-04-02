@@ -3,6 +3,7 @@ use crate::models::Tokens;
 pub fn tokenize(input: &str) -> Vec<Tokens> {
     let mut tokens = Vec::new();
     let mut word = String::new();
+    let mut quoted = false;
     let mut is_quote = false;
     let mut is_double_quote = false;
     let mut is_black_slash = false;
@@ -28,6 +29,7 @@ pub fn tokenize(input: &str) -> Vec<Tokens> {
             '"' => {
                 if !is_quote {
                     is_double_quote = !is_double_quote;
+                    quoted = true;
                     continue;
                 }
                 word.push(char);
@@ -35,6 +37,7 @@ pub fn tokenize(input: &str) -> Vec<Tokens> {
             '\'' => {
                 if !is_double_quote {
                     is_quote = !is_quote;
+                    quoted = true;
                     continue;
                 }
                 word.push(char);
@@ -45,7 +48,8 @@ pub fn tokenize(input: &str) -> Vec<Tokens> {
                     continue;
                 }
                 if !word.is_empty() {
-                    tokens.push(string_to_token(&word));
+                    tokens.push(string_to_token(&word, quoted));
+                    quoted = false;
                     word = String::new();
                 }
             }
@@ -53,19 +57,22 @@ pub fn tokenize(input: &str) -> Vec<Tokens> {
         }
     }
     if !word.is_empty() {
-        tokens.push(string_to_token(&word));
+        tokens.push(string_to_token(&word, quoted));
     }
     tokens
 }
 
-fn string_to_token(val: &String) -> Tokens {
+fn string_to_token(val: &String, quoted: bool) -> Tokens {
     match val.as_str() {
         "2>" => Tokens::OutputErr,
         "2>>" => Tokens::AppendErr,
         ">>" | "1>>" => Tokens::Append,
         ">" | "1>" => Tokens::Output,
         "|" => Tokens::Pipe,
-        _ => Tokens::Word(val.to_owned()),
+        _ => Tokens::Word {
+            value: val.to_owned(),
+            quoted: quoted,
+        },
     }
 }
 

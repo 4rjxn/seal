@@ -29,7 +29,7 @@ pub struct Job {
 
 #[derive(Debug)]
 pub enum Tokens {
-    Word(String),
+    Word { value: String, quoted: bool },
     Pipe,
     Output,
     Append,

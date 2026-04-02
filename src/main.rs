@@ -8,6 +8,7 @@ mod parser;
 mod prompt;
 mod redirection;
 mod repl;
+mod traits;
 mod wait_process;
 
 use nix::sys::signal::{SigHandler, Signal, signal};

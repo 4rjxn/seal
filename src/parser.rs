@@ -9,6 +9,7 @@ use crate::models::Command;
 use crate::models::Pipeline;
 use crate::models::Redirects;
 use crate::models::Tokens;
+use crate::traits::Globbing;
 
 pub fn locate_command(command: &String) -> ShellResult<PathBuf> {
     if let Ok(_) = is_builtin(command) {
@@ -50,9 +51,8 @@ fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
     let mut redirects = Vec::new();
     while let Some(token) = tokens.first() {
         match token {
-            Tokens::Word(word) => {
-                let word = word.to_owned();
-                tokens.remove(0);
+            Tokens::Word { value, quoted } => {
+                let word = value.to_owned();
                 if program.is_none() {
                     if let Ok(program_path) = locate_command(&word) {
                         program = Some(program_path.to_str().unwrap().to_string());
@@ -61,35 +61,41 @@ fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
                         program = Some(word.to_owned());
                         args.push(word);
                     }
+                } else if !quoted {
+                    match word.expand_glob() {
+                        Ok(extended) => args.extend(extended),
+                        Err(_) => args.push(word),
+                    }
                 } else {
                     args.push(word);
                 }
+                tokens.remove(0);
             }
             Tokens::Output => {
                 tokens.remove(0);
-                if let Some(Tokens::Word(file)) = tokens.first() {
-                    redirects.push(Redirects::Output(file.to_owned()));
+                if let Some(Tokens::Word { value, quoted: _ }) = tokens.first() {
+                    redirects.push(Redirects::Output(value.to_owned()));
                     tokens.remove(0);
                 }
             }
             Tokens::OutputErr => {
                 tokens.remove(0);
-                if let Some(Tokens::Word(file)) = tokens.first() {
-                    redirects.push(Redirects::OutputErr(file.to_owned()));
+                if let Some(Tokens::Word { value, quoted: _ }) = tokens.first() {
+                    redirects.push(Redirects::OutputErr(value.to_owned()));
                     tokens.remove(0);
                 }
             }
             Tokens::Append => {
                 tokens.remove(0);
-                if let Some(Tokens::Word(file)) = tokens.first() {
-                    redirects.push(Redirects::Append(file.to_owned()));
+                if let Some(Tokens::Word { value, quoted: _ }) = tokens.first() {
+                    redirects.push(Redirects::Append(value.to_owned()));
                     tokens.remove(0);
                 }
             }
             Tokens::AppendErr => {
                 tokens.remove(0);
-                if let Some(Tokens::Word(file)) = tokens.first() {
-                    redirects.push(Redirects::AppendErr(file.to_owned()));
+                if let Some(Tokens::Word { value, quoted: _ }) = tokens.first() {
+                    redirects.push(Redirects::AppendErr(value.to_owned()));
                     tokens.remove(0);
                 }
             }
