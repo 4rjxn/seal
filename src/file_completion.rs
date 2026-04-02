@@ -9,6 +9,16 @@ use rustyline::{
     validate::Validator,
 };
 
+trait StrExtend {
+    fn escape_spaces(&self) -> String;
+}
+
+impl StrExtend for str {
+    fn escape_spaces(&self) -> String {
+        self.replace(" ", "\\ ")
+    }
+}
+
 pub struct FileCompletion {}
 
 impl Completer for FileCompletion {
@@ -19,9 +29,13 @@ impl Completer for FileCompletion {
         pos: usize,
         _ctx: &rustyline::Context<'_>,
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
-        let prefix = &line[..pos].to_lowercase();
-        let total_length = prefix.len();
-        let prefix = prefix.split_whitespace().last().unwrap();
+        let line = &line[..pos].to_lowercase();
+        let total_length = line.len();
+        let prefix;
+        match line.split_whitespace().last() {
+            Some(l) => prefix = l,
+            None => prefix = "",
+        }
         let final_length = total_length - prefix.len();
         let mut matches = Vec::new();
         let path = Path::new(".");
@@ -32,8 +46,14 @@ impl Completer for FileCompletion {
         for entry in entries {
             let file_name = entry.file_name();
             let name = file_name.unwrap().to_str().unwrap();
-
-            if name.to_lowercase().starts_with(prefix) {
+            if prefix == "" {
+                let name = name.escape_spaces();
+                matches.push(Pair {
+                    display: name.to_string(),
+                    replacement: name.to_string(),
+                });
+            } else if name.to_lowercase().starts_with(prefix) {
+                let name = name.escape_spaces();
                 matches.push(Pair {
                     display: name.to_string(),
                     replacement: name.to_string(),
