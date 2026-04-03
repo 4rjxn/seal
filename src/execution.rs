@@ -16,8 +16,9 @@ use nix::{
 
 use crate::{
     builtins::run_builtin,
-    models::{Command, Job, ShellState},
+    models::{Command, Job, JobStatus, ShellState},
     redirection::set_redirection,
+    utils::print_job,
     wait_process::wait_for_process,
 };
 
@@ -106,11 +107,13 @@ pub fn execute_command(commands: &Vec<Command>, background: bool, state: &mut Sh
         pgid: Pid::from_raw(pgid.unwrap().into()),
         command: commands.last().unwrap().clone(),
         childrens: children.to_owned(),
+        status: JobStatus::Running,
     };
     if !background {
         wait_for_process(job, state);
     } else {
-        println!("[{}] {} {}", job.id, job.pgid, job.command.args[0]);
+        print_job(&job, state.recent_id);
+        state.recent_id = job.id;
         state.jobs.push(job);
     }
 }

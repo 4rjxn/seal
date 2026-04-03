@@ -4,9 +4,13 @@ use nix::{
     sys::wait::{WaitPidFlag, WaitStatus, waitpid},
 };
 
-use crate::models::{Job, ShellState};
+use crate::{
+    models::{Job, JobStatus, ShellState},
+    utils::print_job,
+};
 
 pub fn wait_for_process(job: Job, state: &mut ShellState) {
+    let mut job = job;
     unsafe {
         tcsetpgrp(STDIN_FILENO, job.pgid.into());
     }
@@ -15,10 +19,7 @@ pub fn wait_for_process(job: Job, state: &mut ShellState) {
         loop {
             match waitpid(child.to_owned(), Some(WaitPidFlag::WUNTRACED)) {
                 Ok(WaitStatus::Stopped(_, _)) => {
-                    println!(
-                        "[{}] {} SUSPENDED {}",
-                        job.id, job.pgid, job.command.args[0]
-                    );
+                    job.status = JobStatus::Suspended;
                     suspended = true;
                     break;
                 }
@@ -29,6 +30,8 @@ pub fn wait_for_process(job: Job, state: &mut ShellState) {
         }
     }
     if suspended {
+        state.recent_id = job.id;
+        print_job(&job, state.recent_id);
         state.jobs.push(job);
     }
     unsafe {

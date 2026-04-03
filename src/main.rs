@@ -9,6 +9,7 @@ mod prompt;
 mod redirection;
 mod repl;
 mod traits;
+mod utils;
 mod wait_process;
 
 use nix::sys::signal::{SigHandler, Signal, signal};
@@ -42,7 +43,10 @@ fn process_command(
 }
 
 fn main() {
-    let mut state = ShellState { jobs: vec![] };
+    let mut state = ShellState {
+        jobs: vec![],
+        recent_id: 0,
+    };
     let mut repl = Repl::new().expect("Failed to initialize REPL");
 
     unsafe {

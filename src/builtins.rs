@@ -1,5 +1,7 @@
 use crate::error::ShellResult;
+use crate::models::JobStatus;
 use crate::parser::{is_builtin, locate_command};
+use crate::utils::print_job;
 use std::{
     env,
     io::{Write, stdout},
@@ -7,7 +9,8 @@ use std::{
     process,
 };
 
-use nix::libc::{SIGCONT, STDIN_FILENO, getpgid, getpid, killpg, tcsetpgrp};
+use nix::libc::{SIGCONT, killpg};
+use nix::sys::wait::{WaitPidFlag, WaitStatus, waitpid};
 
 use crate::{
     models::{Builtins, Command, ShellState},
@@ -49,18 +52,25 @@ fn job_builtin(state: &mut ShellState) {
     if state.jobs.is_empty() {
         return;
     }
-    for job in &state.jobs {
-        println!("[{}] {} {}", job.id, job.pgid, job.command.args[0]);
+    for job in &mut state.jobs {
+        match waitpid(job.pgid, Some(WaitPidFlag::WNOHANG)) {
+            Ok(WaitStatus::Exited(_, _)) => job.status = JobStatus::Done,
+            Ok(_) => {}
+            Err(_) => {}
+        }
+        print_job(job, state.recent_id);
     }
+    state.jobs.retain(|j| !matches!(j.status, JobStatus::Done));
 }
 
 fn fg_builtin(state: &mut ShellState) {
     match state.jobs.pop() {
         Some(job) => unsafe {
-            tcsetpgrp(STDIN_FILENO, job.pgid.as_raw());
             killpg(job.pgid.as_raw(), SIGCONT);
             wait_for_process(job, state);
-            tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
+            if let Some(job) = state.jobs.last() {
+                state.recent_id = job.id
+            }
         },
         None => {
             println!("no background process.");

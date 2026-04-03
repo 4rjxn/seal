@@ -20,12 +20,20 @@ pub enum Builtins {
 }
 
 pub struct ShellState {
+    pub recent_id: usize,
     pub jobs: Vec<Job>,
+}
+
+pub enum JobStatus {
+    Running,
+    Suspended,
+    Done,
 }
 
 pub struct Job {
     pub id: usize,
     pub pgid: Pid,
+    pub status: JobStatus,
     pub command: Command,
     pub childrens: Vec<Pid>,
 }
