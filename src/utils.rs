@@ -1,4 +1,8 @@
-use crate::models::{Job, JobStatus};
+use crate::models::{Job, JobStatus, ShellState};
+
+pub fn ok_to_exit(state: &ShellState) -> bool {
+    state.jobs.is_empty()
+}
 
 pub fn print_job(job: &Job, recent: usize) {
     let status = match job.status {

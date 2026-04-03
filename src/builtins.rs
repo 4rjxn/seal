@@ -1,7 +1,7 @@
 use crate::error::ShellResult;
 use crate::models::JobStatus;
 use crate::parser::{is_builtin, locate_command};
-use crate::utils::print_job;
+use crate::utils::{ok_to_exit, print_job};
 use std::{
     env,
     io::{Write, stdout},
@@ -27,7 +27,7 @@ pub fn run_builtin(
             echo_builtin(command)?;
         }
         Builtins::Exit => {
-            exit_builtin();
+            exit_builtin(state);
         }
         Builtins::Type => {
             type_builtin(command)?;
@@ -94,8 +94,12 @@ fn cd_builtin(command: &Command) -> ShellResult<()> {
     }
 }
 
-fn exit_builtin() {
-    process::exit(0)
+fn exit_builtin(state: &ShellState) {
+    if ok_to_exit(state) {
+        process::exit(0)
+    } else {
+        println!("you have unfinished jobs.");
+    }
 }
 
 fn echo_builtin(command: &Command) -> ShellResult<()> {

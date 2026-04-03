@@ -20,6 +20,7 @@ use crate::{
     models::{Command, ShellState},
     parser::parse_pipelines,
     repl::Repl,
+    utils::ok_to_exit,
 };
 use std::io::{Write, stdout};
 
@@ -59,7 +60,12 @@ fn main() {
                     let _ = process_command(pipeline.commands, pipeline.background, &mut state);
                 }
             }
-            None => break,
+            None => {
+                if ok_to_exit(&state) {
+                    break;
+                }
+                println!("you have unfinished jobs.");
+            }
         }
     }
 }
