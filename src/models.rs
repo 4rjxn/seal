@@ -6,6 +6,7 @@ use crate::parser::is_builtin;
 
 pub struct Pipeline {
     pub commands: Vec<Command>,
+    pub background: bool,
 }
 
 pub enum Builtins {
@@ -15,6 +16,7 @@ pub enum Builtins {
     Pwd,
     Cd,
     Fg,
+    Jobs,
 }
 
 pub struct ShellState {
@@ -22,6 +24,7 @@ pub struct ShellState {
 }
 
 pub struct Job {
+    pub id: usize,
     pub pgid: Pid,
     pub command: Command,
     pub childrens: Vec<Pid>,
@@ -35,6 +38,7 @@ pub enum Tokens {
     Append,
     OutputErr,
     AppendErr,
+    Background,
 }
 
 #[derive(Debug, Clone)]

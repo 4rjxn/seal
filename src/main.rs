@@ -22,7 +22,11 @@ use crate::{
 };
 use std::io::{Write, stdout};
 
-fn process_command(commands: Vec<Command>, state: &mut ShellState) -> ShellResult<()> {
+fn process_command(
+    commands: Vec<Command>,
+    background: bool,
+    state: &mut ShellState,
+) -> ShellResult<()> {
     for command in &commands {
         if !command.is_valid() {
             stdout()
@@ -33,7 +37,7 @@ fn process_command(commands: Vec<Command>, state: &mut ShellState) -> ShellResul
             ));
         }
     }
-    execute_command(&commands, state);
+    execute_command(&commands, background, state);
     Ok(())
 }
 
@@ -48,7 +52,7 @@ fn main() {
         match repl.read_and_parse() {
             Some(tokens) => {
                 if let Some(pipeline) = parse_pipelines(tokens) {
-                    let _ = process_command(pipeline.commands, &mut state);
+                    let _ = process_command(pipeline.commands, pipeline.background, &mut state);
                 }
             }
             None => break,

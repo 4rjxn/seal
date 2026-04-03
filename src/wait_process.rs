@@ -15,7 +15,10 @@ pub fn wait_for_process(job: Job, state: &mut ShellState) {
         loop {
             match waitpid(child.to_owned(), Some(WaitPidFlag::WUNTRACED)) {
                 Ok(WaitStatus::Stopped(_, _)) => {
-                    println!("stopped {}", &job.command.program);
+                    println!(
+                        "[{}] {} SUSPENDED {}",
+                        job.id, job.pgid, job.command.args[0]
+                    );
                     suspended = true;
                     break;
                 }

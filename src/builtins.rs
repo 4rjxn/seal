@@ -38,8 +38,20 @@ pub fn run_builtin(
         Builtins::Fg => {
             fg_builtin(state);
         }
+        Builtins::Jobs => {
+            job_builtin(state);
+        }
     }
     Ok(())
+}
+
+fn job_builtin(state: &mut ShellState) {
+    if state.jobs.is_empty() {
+        return;
+    }
+    for job in &state.jobs {
+        println!("[{}] {} {}", job.id, job.pgid, job.command.args[0]);
+    }
 }
 
 fn fg_builtin(state: &mut ShellState) {

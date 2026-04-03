@@ -41,6 +41,7 @@ pub fn is_builtin(command: &String) -> ShellResult<Builtins> {
         "pwd" => Ok(Builtins::Pwd),
         "cd" => Ok(Builtins::Cd),
         "fg" => Ok(Builtins::Fg),
+        "jobs" => Ok(Builtins::Jobs),
         _ => Err(ShellError::InvalidBuiltin(command.clone())),
     }
 }
@@ -100,6 +101,7 @@ fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
                 }
             }
             Tokens::Pipe => break,
+            Tokens::Background => {}
         }
     }
     return Some(Command {
@@ -109,9 +111,28 @@ fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
     });
 }
 
+fn is_background(tokens: &mut Vec<Tokens>) -> bool {
+    let tokens = tokens;
+    let mut background = false;
+    if let Some(last) = tokens.last() {
+        if matches!(last, Tokens::Background) {
+            background = true;
+            tokens.pop();
+        }
+    }
+    if tokens.iter().any(|t| matches!(t, Tokens::Background)) {
+        background = false;
+    }
+    if background {
+        return background;
+    }
+    background
+}
+
 pub fn parse_pipelines(tokens: Vec<Tokens>) -> Option<Pipeline> {
     let mut tokens = tokens;
     let mut commands = Vec::new();
+    let background = is_background(&mut tokens);
     while !tokens.is_empty() {
         let cmd = parse_command(&mut tokens)?;
         commands.push(cmd);
@@ -121,7 +142,10 @@ pub fn parse_pipelines(tokens: Vec<Tokens>) -> Option<Pipeline> {
             break;
         }
     }
-    Some(Pipeline { commands })
+    Some(Pipeline {
+        commands,
+        background,
+    })
 }
 
 #[cfg(test)]

@@ -64,6 +64,7 @@ pub fn tokenize(input: &str) -> Vec<Tokens> {
 
 fn string_to_token(val: &String, quoted: bool) -> Tokens {
     match val.as_str() {
+        "&" => Tokens::Background,
         "2>" => Tokens::OutputErr,
         "2>>" => Tokens::AppendErr,
         ">>" | "1>>" => Tokens::Append,

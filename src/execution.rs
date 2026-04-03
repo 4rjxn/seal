@@ -21,7 +21,7 @@ use crate::{
     wait_process::wait_for_process,
 };
 
-pub fn execute_command(commands: &Vec<Command>, state: &mut ShellState) {
+pub fn execute_command(commands: &Vec<Command>, background: bool, state: &mut ShellState) {
     let mut prev_read: Option<OwnedFd> = None;
     if commands.len() == 1 {
         if let Ok(built_in) = commands[0].is_builtin() {
@@ -102,9 +102,15 @@ pub fn execute_command(commands: &Vec<Command>, state: &mut ShellState) {
         }
     }
     let job = Job {
+        id: state.jobs.len() + 1,
         pgid: Pid::from_raw(pgid.unwrap().into()),
         command: commands.last().unwrap().clone(),
         childrens: children.to_owned(),
     };
-    wait_for_process(job, state);
+    if !background {
+        wait_for_process(job, state);
+    } else {
+        println!("[{}] {} {}", job.id, job.pgid, job.command.args[0]);
+        state.jobs.push(job);
+    }
 }
