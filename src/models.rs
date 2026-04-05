@@ -24,12 +24,14 @@ pub struct ShellState {
     pub jobs: Vec<Job>,
 }
 
+#[derive(Clone)]
 pub enum JobStatus {
     Running,
     Suspended,
     Done,
 }
 
+#[derive(Clone)]
 pub struct Job {
     pub id: usize,
     pub pgid: Pid,

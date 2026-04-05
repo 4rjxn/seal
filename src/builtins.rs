@@ -39,7 +39,7 @@ pub fn run_builtin(
             cd_builtin(command)?;
         }
         Builtins::Fg => {
-            fg_builtin(state);
+            fg_builtin(command, state);
         }
         Builtins::Jobs => {
             job_builtin(state);
@@ -63,8 +63,21 @@ fn job_builtin(state: &mut ShellState) {
     state.jobs.retain(|j| !matches!(j.status, JobStatus::Done));
 }
 
-fn fg_builtin(state: &mut ShellState) {
-    match state.jobs.pop() {
+fn fg_builtin(command: &Command, state: &mut ShellState) {
+    let job = if let Some(arg) = command.args.get(1) {
+        if let Ok(id) = arg.parse::<usize>() {
+            state
+                .jobs
+                .iter()
+                .position(|job| job.id == id)
+                .map(|pos| state.jobs.remove(pos))
+        } else {
+            None
+        }
+    } else {
+        state.jobs.pop()
+    };
+    match job {
         Some(job) => unsafe {
             killpg(job.pgid.as_raw(), SIGCONT);
             wait_for_process(job, state);
