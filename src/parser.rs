@@ -12,6 +12,11 @@ use crate::models::Tokens;
 use crate::traits::Globbing;
 
 pub fn locate_command(command: &String) -> ShellResult<PathBuf> {
+    if command.starts_with("./") {
+        let command = command.replace("./", "");
+        let curr_dir = env::current_dir().unwrap();
+        return Ok(PathBuf::from(curr_dir).join(command));
+    }
     if let Ok(_) = is_builtin(command) {
         return Ok(PathBuf::from(command));
     }
