@@ -9,7 +9,7 @@ use crate::models::Command;
 use crate::models::Pipeline;
 use crate::models::Redirects;
 use crate::models::Tokens;
-use crate::traits::Globbing;
+use crate::traits::Expantions;
 
 pub fn locate_command(command: &String) -> ShellResult<PathBuf> {
     if command.starts_with("./") {
@@ -60,20 +60,27 @@ fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
             Tokens::Word { value, quoted } => {
                 let word = value.to_owned();
                 if program.is_none() {
-                    if let Ok(program_path) = locate_command(&word) {
-                        program = Some(program_path.to_str().unwrap().to_string());
-                        args.push(word);
-                    } else {
-                        program = Some(word.to_owned());
-                        args.push(word);
-                    }
-                } else if !quoted {
-                    match word.expand_glob() {
-                        Ok(extended) => args.extend(extended),
-                        Err(_) => args.push(word),
-                    }
-                } else {
+                    let program_path = locate_command(&word)
+                        .ok()
+                        .and_then(|p| p.to_str().map(|s| s.to_string()))
+                        .unwrap_or_else(|| word.clone());
+                    program = Some(program_path);
                     args.push(word);
+                    tokens.remove(0);
+                    continue;
+                }
+
+                match quoted {
+                    false => match word.starts_with("~") {
+                        true => args.push(word.expand_path()),
+                        false => match word.expand_glob() {
+                            Ok(exp) => args.extend(exp),
+                            Err(_) => args.push(word),
+                        },
+                    },
+                    true => {
+                        args.push(word);
+                    }
                 }
                 tokens.remove(0);
             }
@@ -161,8 +168,14 @@ mod tests {
     #[test]
     fn test_parse_simple_command() {
         let tokens = vec![
-            Tokens::Word("ls".to_string()),
-            Tokens::Word("-l".to_string()),
+            Tokens::Word {
+                value: String::from("ls"),
+                quoted: false,
+            },
+            Tokens::Word {
+                value: String::from("-l"),
+                quoted: false,
+            },
         ];
         let pipeline = parse_pipelines(tokens).unwrap();
         assert_eq!(pipeline.commands.len(), 1);
@@ -173,10 +186,19 @@ mod tests {
     #[test]
     fn test_parse_pipe() {
         let tokens = vec![
-            Tokens::Word("ls".to_string()),
+            Tokens::Word {
+                value: "ls".to_string(),
+                quoted: false,
+            },
             Tokens::Pipe,
-            Tokens::Word("grep".to_string()),
-            Tokens::Word("foo".to_string()),
+            Tokens::Word {
+                value: "grep".to_string(),
+                quoted: false,
+            },
+            Tokens::Word {
+                value: "foo".to_string(),
+                quoted: false,
+            },
         ];
         let pipeline = parse_pipelines(tokens).unwrap();
         assert_eq!(pipeline.commands.len(), 2);
@@ -187,10 +209,19 @@ mod tests {
     #[test]
     fn test_parse_redirection() {
         let tokens = vec![
-            Tokens::Word("echo".to_string()),
-            Tokens::Word("hello".to_string()),
+            Tokens::Word {
+                value: "echo".to_string(),
+                quoted: false,
+            },
+            Tokens::Word {
+                value: "hello".to_string(),
+                quoted: false,
+            },
             Tokens::Output,
-            Tokens::Word("out.txt".to_string()),
+            Tokens::Word {
+                value: "out.txt".to_string(),
+                quoted: false,
+            },
         ];
         let pipeline = parse_pipelines(tokens).unwrap();
         assert_eq!(pipeline.commands.len(), 1);
@@ -200,5 +231,22 @@ mod tests {
         } else {
             panic!("Expected Output");
         }
+    }
+    #[test]
+    fn home_expansion() {
+        let tokens = vec![
+            Tokens::Word {
+                value: String::from("cd"),
+                quoted: false,
+            },
+            Tokens::Word {
+                value: String::from("~"),
+                quoted: false,
+            },
+        ];
+        let pipeline = parse_pipelines(tokens).unwrap();
+        assert_eq!(pipeline.commands.len(), 1);
+        assert!(pipeline.commands[0].program.ends_with("cd"));
+        assert_eq!(pipeline.commands[0].args, vec!["cd", "/home/arjun"]);
     }
 }

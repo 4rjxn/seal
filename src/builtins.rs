@@ -2,10 +2,10 @@ use crate::error::ShellResult;
 use crate::models::JobStatus;
 use crate::parser::{is_builtin, locate_command};
 use crate::utils::{ok_to_exit, print_job};
+use std::path::PathBuf;
 use std::{
     env,
     io::{Write, stdout},
-    path::PathBuf,
     process,
 };
 
@@ -92,16 +92,15 @@ fn fg_builtin(command: &Command, state: &mut ShellState) {
 }
 
 fn cd_builtin(command: &Command) -> ShellResult<()> {
-    let home = env::var("HOME").unwrap_or_else(|_| "/".to_string());
-    let mut path = PathBuf::from(&home);
-    if command.args.len() > 1 {
-        let abspath = &command.args[1].replacen("~", &home, 1);
-        path = PathBuf::from(abspath);
+    let path: PathBuf;
+    match command.args.len() == 1 {
+        false => path = PathBuf::from(&command.args[1]),
+        true => path = env::home_dir().unwrap_or_else(|| PathBuf::from("/")),
     }
-    match env::set_current_dir(&path) {
+    match env::set_current_dir(path) {
         Ok(_) => Ok(()),
         Err(e) => {
-            println!("cd: {}: No such file or directory", path.to_str().unwrap());
+            println!("cd: {}: No such file or directory", command.args[1]);
             Err(e.into())
         }
     }

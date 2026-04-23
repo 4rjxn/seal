@@ -86,8 +86,13 @@ mod tests {
         let input = "ls -l";
         let tokens = tokenize(input);
         assert_eq!(tokens.len(), 2);
-        if let Tokens::Word(ref w) = tokens[0] {
+        if let Tokens::Word {
+            value: ref w,
+            quoted: b,
+        } = tokens[0]
+        {
             assert_eq!(w, "ls");
+            assert_eq!(b, false);
         } else {
             panic!("Expected Word");
         }
@@ -115,13 +120,23 @@ mod tests {
         let input = "echo 'hello world' \"foo bar\"";
         let tokens = tokenize(input);
         assert_eq!(tokens.len(), 3);
-        if let Tokens::Word(ref w) = tokens[1] {
+        if let Tokens::Word {
+            value: ref w,
+            quoted: b,
+        } = tokens[1]
+        {
             assert_eq!(w, "hello world");
+            assert_eq!(b, true);
         } else {
             panic!("Expected Word");
         }
-        if let Tokens::Word(ref w) = tokens[2] {
+        if let Tokens::Word {
+            value: ref w,
+            quoted: b,
+        } = tokens[2]
+        {
             assert_eq!(w, "foo bar");
+            assert_eq!(b, true);
         } else {
             panic!("Expected Word");
         }
