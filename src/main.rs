@@ -61,10 +61,10 @@ fn main() {
                 }
             }
             None => {
-                if ok_to_exit(&state) {
+                if ok_to_exit(&mut state) {
                     break;
                 }
-                println!("you have unfinished jobs.");
+                println!("There are things to be done..");
             }
         }
     }

@@ -1,6 +1,10 @@
-use crate::models::{Job, JobStatus, ShellState};
+use crate::{
+    builtins::job_builtin,
+    models::{Job, JobStatus, ShellState},
+};
 
-pub fn ok_to_exit(state: &ShellState) -> bool {
+pub fn ok_to_exit(state: &mut ShellState) -> bool {
+    job_builtin(state);
     state.jobs.is_empty()
 }
 

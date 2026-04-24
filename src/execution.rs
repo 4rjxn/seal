@@ -52,6 +52,7 @@ pub fn execute_command(commands: &Vec<Command>, background: bool, state: &mut Sh
                 match fork_result {
                     nix::unistd::ForkResult::Child => {
                         signal(Signal::SIGINT, SigHandler::SigDfl).unwrap();
+                        signal(Signal::SIGTERM, SigHandler::SigDfl).unwrap();
                         signal(Signal::SIGTSTP, SigHandler::SigDfl).unwrap();
                         if let Some(pgid) = pgid {
                             setpgid(Pid::from_raw(0), pgid).unwrap();

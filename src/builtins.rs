@@ -48,7 +48,7 @@ pub fn run_builtin(
     Ok(())
 }
 
-fn job_builtin(state: &mut ShellState) {
+pub fn job_builtin(state: &mut ShellState) {
     if state.jobs.is_empty() {
         return;
     }
@@ -62,6 +62,10 @@ fn job_builtin(state: &mut ShellState) {
     }
     state.jobs.retain(|j| !matches!(j.status, JobStatus::Done));
 }
+
+//fn bg_builtin(command: &Command, state: &ShellState) {
+//    todo!();
+//}
 
 fn fg_builtin(command: &Command, state: &mut ShellState) {
     let job = if let Some(arg) = command.args.get(1) {
@@ -106,7 +110,7 @@ fn cd_builtin(command: &Command) -> ShellResult<()> {
     }
 }
 
-fn exit_builtin(state: &ShellState) {
+fn exit_builtin(state: &mut ShellState) {
     if ok_to_exit(state) {
         process::exit(0)
     } else {
