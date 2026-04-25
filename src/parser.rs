@@ -71,13 +71,11 @@ fn parse_command(tokens: &mut Vec<Tokens>) -> Option<Command> {
                 }
 
                 match quoted {
-                    false => match word.starts_with("~") {
-                        true => args.push(word.expand_path()),
-                        false => match word.expand_glob() {
-                            Ok(exp) => args.extend(exp),
-                            Err(_) => args.push(word),
-                        },
-                    },
+                    false => {
+                        let word = word.expand_path();
+                        let word = word.expand_glob();
+                        args.extend(word);
+                    }
                     true => {
                         args.push(word);
                     }

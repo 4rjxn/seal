@@ -57,6 +57,9 @@ fn main() {
         match repl.read_and_parse() {
             Some(tokens) => {
                 if let Some(pipeline) = parse_pipelines(tokens) {
+                    if cfg!(debug_assertions) {
+                        println!("{:?}", pipeline.commands);
+                    }
                     let _ = process_command(pipeline.commands, pipeline.background, &mut state);
                 }
             }
