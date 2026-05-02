@@ -1,8 +1,4 @@
-use crate::error::ShellResult;
-use crate::parser::is_valid_command;
 use nix::unistd::Pid;
-
-use crate::parser::is_builtin;
 
 pub struct Pipeline {
     pub commands: Vec<Command>,
@@ -40,8 +36,16 @@ pub struct Job {
     pub childrens: Vec<Pid>,
 }
 
-#[derive(Debug)]
-pub enum Tokens {
+#[derive(Debug, Clone, PartialEq)]
+pub enum LexerState {
+    Normal,
+    InSingleQuote,
+    InDoubleQuote,
+    Escaped { return_to: Box<LexerState> },
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Token {
     Word { value: String, quoted: bool },
     Pipe,
     Output,
@@ -52,26 +56,22 @@ pub enum Tokens {
 }
 
 #[derive(Debug, Clone)]
-pub enum Redirects {
-    //Input(String),
-    Output(String),
-    OutputErr(String),
-    Append(String),
-    AppendErr(String),
+pub struct Redirect {
+    pub kind: RedirectKind,
+    pub target: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum RedirectKind {
+    Output,
+    OutputErr,
+    Append,
+    AppendErr,
 }
 
 #[derive(Debug, Clone)]
 pub struct Command {
     pub program: String,
     pub args: Vec<String>,
-    pub redirects: Vec<Redirects>,
-}
-
-impl Command {
-    pub fn is_valid(&self) -> bool {
-        is_builtin(&self.program).is_ok() || is_valid_command(&self.program)
-    }
-    pub fn is_builtin(&self) -> ShellResult<Builtins> {
-        is_builtin(&self.program)
-    }
+    pub redirects: Vec<Redirect>,
 }

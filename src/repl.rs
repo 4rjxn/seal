@@ -6,7 +6,7 @@ use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 use crate::error::ShellResult;
 use crate::file_completion::FileCompletion;
 use crate::lexer::tokenize;
-use crate::models::Tokens;
+use crate::models::Token;
 use crate::prompt::set_prompt;
 
 pub struct Repl {
@@ -32,7 +32,7 @@ impl Repl {
         })
     }
 
-    pub fn read_and_parse(&mut self) -> Option<Vec<Tokens>> {
+    pub fn read_and_parse(&mut self) -> Option<Vec<Token>> {
         loop {
             let readline = self.editor.readline(set_prompt().as_str());
             match readline {
