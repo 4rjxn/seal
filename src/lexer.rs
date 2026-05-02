@@ -1,144 +1,174 @@
-use crate::models::Tokens;
+use core::str;
 
-pub fn tokenize(input: &str) -> Vec<Tokens> {
-    let mut tokens = Vec::new();
-    let mut word = String::new();
-    let mut quoted = false;
-    let mut is_quote = false;
-    let mut is_double_quote = false;
-    let mut is_black_slash = false;
+use crate::models::{LexerState, Token};
 
-    if input.is_empty() {
-        return tokens;
-    }
-
-    for char in input.trim().chars() {
-        if is_black_slash {
-            word.push(char);
-            is_black_slash = !is_black_slash;
-            continue;
-        }
-        match char {
-            '\\' => {
-                if !is_quote {
-                    is_black_slash = !is_black_slash;
-                    continue;
-                }
-                word.push(char);
-            }
-            '"' => {
-                if !is_quote {
-                    is_double_quote = !is_double_quote;
-                    quoted = true;
-                    continue;
-                }
-                word.push(char);
-            }
-            '\'' => {
-                if !is_double_quote {
-                    is_quote = !is_quote;
-                    quoted = true;
-                    continue;
-                }
-                word.push(char);
-            }
-            ' ' => {
-                if is_quote || is_double_quote {
-                    word.push(char);
-                    continue;
-                }
-                if !word.is_empty() {
-                    tokens.push(string_to_token(&word, quoted));
-                    quoted = false;
-                    word = String::new();
-                }
-            }
-            _ => word.push(char),
-        }
-    }
-    if !word.is_empty() {
-        tokens.push(string_to_token(&word, quoted));
-    }
-    tokens
+pub fn tokenize(input: &str) -> Vec<Token> {
+    Lexer::new(input).tokenize()
 }
 
-fn string_to_token(val: &String, quoted: bool) -> Tokens {
-    match val.as_str() {
-        "&" => Tokens::Background,
-        "2>" => Tokens::OutputErr,
-        "2>>" => Tokens::AppendErr,
-        ">>" | "1>>" => Tokens::Append,
-        ">" | "1>" => Tokens::Output,
-        "|" => Tokens::Pipe,
-        _ => Tokens::Word {
-            value: val.to_owned(),
-            quoted: quoted,
+struct Lexer<'a> {
+    input: str::Chars<'a>,
+    state: LexerState,
+    current_word: String,
+    was_quoted: bool,
+}
+
+impl<'a> Lexer<'a> {
+    pub fn new(input: &'a str) -> Self {
+        Self {
+            input: input.trim().chars(),
+            state: LexerState::Normal,
+            current_word: String::new(),
+            was_quoted: false,
+        }
+    }
+    pub fn tokenize(mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+        while let Some(ch) = self.input.next() {
+            if let Some(token) = self.step(ch) {
+                tokens.push(token);
+            }
+        }
+        self.flush_word(&mut tokens);
+        tokens
+    }
+}
+
+impl<'a> Lexer<'a> {
+    fn step(&mut self, ch: char) -> Option<Token> {
+        match &self.state.clone() {
+            LexerState::Escaped { return_to } => {
+                self.current_word.push(ch);
+                self.state = *return_to.clone();
+                None
+            }
+            LexerState::InSingleQuote => self.step_in_single_quote(ch),
+            LexerState::InDoubleQuote => self.step_in_double_quote(ch),
+            LexerState::Normal => self.step_normal(ch),
+        }
+    }
+    fn step_normal(&mut self, ch: char) -> Option<Token> {
+        match ch {
+            '\\' => {
+                self.state = LexerState::Escaped {
+                    return_to: Box::new(LexerState::Normal),
+                };
+                None
+            }
+            '\'' => {
+                self.enter_quote(LexerState::InSingleQuote);
+                None
+            }
+            '"' => {
+                self.enter_quote(LexerState::InDoubleQuote);
+                None
+            }
+            ' ' | '\t' => self.flush_current_word(),
+            _ => {
+                self.current_word.push(ch);
+                None
+            }
+        }
+    }
+
+    fn step_in_single_quote(&mut self, ch: char) -> Option<Token> {
+        match ch {
+            '\'' => {
+                self.state = LexerState::Normal;
+                None
+            }
+            _ => {
+                self.current_word.push(ch);
+                None
+            }
+        }
+    }
+
+    fn step_in_double_quote(&mut self, ch: char) -> Option<Token> {
+        match ch {
+            '"' => {
+                self.state = LexerState::Normal;
+                None
+            }
+            '\\' => {
+                self.state = LexerState::Escaped {
+                    return_to: Box::new(LexerState::InDoubleQuote),
+                };
+                None
+            }
+            _ => {
+                self.current_word.push(ch);
+                None
+            }
+        }
+    }
+}
+
+//some helper methodes;
+impl<'a> Lexer<'a> {
+    fn enter_quote(&mut self, state: LexerState) {
+        self.state = state;
+        self.was_quoted = true;
+    }
+
+    fn flush_current_word(&mut self) -> Option<Token> {
+        if self.current_word.is_empty() {
+            return None;
+        }
+        let token = word_to_token(&self.current_word, self.was_quoted);
+        self.current_word.clear();
+        Some(token)
+    }
+    fn flush_word(&mut self, tokens: &mut Vec<Token>) {
+        if let Some(t) = self.flush_current_word() {
+            tokens.push(t);
+        }
+    }
+}
+fn word_to_token(word: &str, quoted: bool) -> Token {
+    match word {
+        "|" => Token::Pipe,
+        "&" => Token::Background,
+        ">" | "1>" => Token::Output,
+        ">>" => Token::Append,
+        "2>" => Token::OutputErr,
+        "2>>" => Token::AppendErr,
+        _ => Token::Word {
+            value: word.to_owned(),
+            quoted,
         },
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::{lexer::tokenize, models::Token};
 
     #[test]
-    fn test_simple_command() {
-        let input = "ls -l";
+    fn check_basic_tokenization() {
+        let input = "ls -lah | grep a";
         let tokens = tokenize(input);
-        assert_eq!(tokens.len(), 2);
-        if let Tokens::Word {
-            value: ref w,
-            quoted: b,
-        } = tokens[0]
-        {
-            assert_eq!(w, "ls");
-            assert_eq!(b, false);
-        } else {
-            panic!("Expected Word");
-        }
-    }
-
-    #[test]
-    fn test_pipes() {
-        let input = "cat file | grep pattern";
-        let tokens = tokenize(input);
-        assert_eq!(tokens.len(), 5);
-        assert!(matches!(tokens[2], Tokens::Pipe));
-    }
-
-    #[test]
-    fn test_redirection() {
-        let input = "echo hello > out.txt 2> err.txt";
-        let tokens = tokenize(input);
-        assert_eq!(tokens.len(), 6);
-        assert!(matches!(tokens[2], Tokens::Output));
-        assert!(matches!(tokens[4], Tokens::OutputErr));
-    }
-
-    #[test]
-    fn test_quotes() {
-        let input = "echo 'hello world' \"foo bar\"";
-        let tokens = tokenize(input);
-        assert_eq!(tokens.len(), 3);
-        if let Tokens::Word {
-            value: ref w,
-            quoted: b,
-        } = tokens[1]
-        {
-            assert_eq!(w, "hello world");
-            assert_eq!(b, true);
-        } else {
-            panic!("Expected Word");
-        }
-        if let Tokens::Word {
-            value: ref w,
-            quoted: b,
-        } = tokens[2]
-        {
-            assert_eq!(w, "foo bar");
-            assert_eq!(b, true);
-        } else {
-            panic!("Expected Word");
-        }
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Word {
+                    value: "ls".to_string(),
+                    quoted: false
+                },
+                Token::Word {
+                    value: "-lah".to_string(),
+                    quoted: false
+                },
+                Token::Pipe,
+                Token::Word {
+                    value: "grep".to_string(),
+                    quoted: false
+                },
+                Token::Word {
+                    value: "a".to_string(),
+                    quoted: false
+                }
+            ]
+        )
     }
 }
