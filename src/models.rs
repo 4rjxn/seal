@@ -1,4 +1,11 @@
+use std::path::PathBuf;
+
 use nix::unistd::Pid;
+
+use crate::{
+    error::ShellResult,
+    utils::{current_absolute_path, get_path_from_env, is_builtin},
+};
 
 pub struct Pipeline {
     pub commands: Vec<Command>,
@@ -18,6 +25,15 @@ pub enum Builtins {
 pub struct ShellState {
     pub recent_id: usize,
     pub jobs: Vec<Job>,
+}
+
+impl ShellState {
+    pub fn new() -> Self {
+        Self {
+            recent_id: 0,
+            jobs: vec![],
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -74,4 +90,31 @@ pub struct Command {
     pub program: String,
     pub args: Vec<String>,
     pub redirects: Vec<Redirect>,
+}
+
+impl Command {
+    pub fn kind(&self) -> CommandKind {
+        if let Some(builtin) = is_builtin(&self.program) {
+            return CommandKind::Builtin(builtin);
+        }
+        CommandKind::External
+    }
+    pub fn find_binary_from_path(&mut self) -> bool {
+        if let Ok(path) = self.locate_command() {
+            self.program = path.to_str().unwrap().to_string();
+            return true;
+        }
+        false
+    }
+    fn locate_command(&self) -> ShellResult<PathBuf> {
+        if self.program.starts_with("./") {
+            return current_absolute_path(&self.program);
+        }
+        get_path_from_env(&self.program)
+    }
+}
+
+pub enum CommandKind {
+    Builtin(Builtins),
+    External,
 }

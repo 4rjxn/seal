@@ -7,41 +7,41 @@ use nix::{
 };
 
 use crate::error::ShellResult;
-use crate::models::{Command, Redirects};
+use crate::models::{Command, RedirectKind};
 
 pub fn set_redirection(command: &Command) -> ShellResult<()> {
     if command.redirects.is_empty() {
         return Ok(());
     }
     for redirect in &command.redirects {
-        match redirect {
-            Redirects::Output(file) => {
+        match redirect.kind {
+            RedirectKind::Output => {
                 let fd = open(
-                    file.as_str(),
+                    redirect.target.as_str(),
                     OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_TRUNC,
                     Mode::from_bits(0o644).unwrap(),
                 )?;
                 unsafe { dup2(fd.as_raw_fd(), 1) };
             }
-            Redirects::OutputErr(file) => {
+            RedirectKind::OutputErr => {
                 let fd = open(
-                    file.as_str(),
+                    redirect.target.as_str(),
                     OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_TRUNC,
                     Mode::from_bits(0o644).unwrap(),
                 )?;
                 unsafe { dup2(fd.as_raw_fd(), 2) };
             }
-            Redirects::Append(file) => {
+            RedirectKind::Append => {
                 let fd = open(
-                    file.as_str(),
+                    redirect.target.as_str(),
                     OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_APPEND,
                     Mode::from_bits(0o644).unwrap(),
                 )?;
                 unsafe { dup2(fd.as_raw_fd(), 1) };
             }
-            Redirects::AppendErr(file) => {
+            RedirectKind::AppendErr => {
                 let fd = open(
-                    file.as_str(),
+                    redirect.target.as_str(),
                     OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_APPEND,
                     Mode::from_bits(0o644).unwrap(),
                 )?;

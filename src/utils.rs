@@ -1,7 +1,46 @@
+use std::{env, path::PathBuf};
+
+use is_executable::IsExecutable;
+
 use crate::{
     builtins::job_builtin,
-    models::{Job, JobStatus, ShellState},
+    error::{ShellError, ShellResult},
+    models::{Builtins, Job, JobStatus, ShellState},
 };
+
+pub fn get_path_from_env(command: &String) -> ShellResult<PathBuf> {
+    match env::var_os("PATH") {
+        Some(paths) => {
+            for mut path in env::split_paths(&paths) {
+                path = path.join(command);
+                if path.is_executable() {
+                    return Ok(path);
+                }
+            }
+            return Err(ShellError::CommandNotFound(command.clone()));
+        }
+        None => Err(ShellError::CommandNotFound(command.clone())),
+    }
+}
+
+pub fn is_builtin(path: &str) -> Option<Builtins> {
+    match path {
+        "echo" => Some(Builtins::Echo),
+        "exit" => Some(Builtins::Exit),
+        "type" => Some(Builtins::Type),
+        "jobs" => Some(Builtins::Jobs),
+        "pwd" => Some(Builtins::Pwd),
+        "cd" => Some(Builtins::Cd),
+        "fg" => Some(Builtins::Fg),
+        _ => None,
+    }
+}
+
+pub fn current_absolute_path(command: &String) -> ShellResult<PathBuf> {
+    let command = command.replace("./", "");
+    let curr_dir = env::current_dir().unwrap();
+    return Ok(PathBuf::from(curr_dir).join(command));
+}
 
 pub fn ok_to_exit(state: &mut ShellState) -> bool {
     job_builtin(state);

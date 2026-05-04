@@ -1,7 +1,6 @@
 use crate::error::ShellResult;
 use crate::models::JobStatus;
-use crate::parser::{is_builtin, locate_command};
-use crate::utils::{ok_to_exit, print_job};
+use crate::utils::{get_path_from_env, ok_to_exit, print_job};
 use std::path::PathBuf;
 use std::{
     env,
@@ -130,11 +129,7 @@ fn echo_builtin(command: &Command) -> ShellResult<()> {
 
 fn type_builtin(command: &Command) -> ShellResult<()> {
     if command.args.len() > 1 {
-        if is_builtin(&command.args[1]).is_ok() {
-            stdout().write_all(format!("{} is a shell builtin\n", command.args[1]).as_bytes())?;
-            return Ok(());
-        }
-        match locate_command(&command.args[1]) {
+        match get_path_from_env(&command.args[1]) {
             Ok(path) => {
                 stdout().write_all(
                     format!("{} is {}\n", &command.args[1], path.to_str().unwrap()).as_bytes(),

@@ -12,63 +12,61 @@ mod traits;
 mod utils;
 mod wait_process;
 
+use std::process::exit;
+
 use nix::sys::signal::{SigHandler, Signal, signal};
 
 use crate::{
     error::ShellResult,
-    execution::execute_command,
-    models::{Command, ShellState},
-    parser::parse_pipelines,
+    execution::spawn_pipeline,
+    models::{Command, Pipeline, ShellState},
+    parser::parse_tokens,
     repl::Repl,
     utils::ok_to_exit,
 };
-use std::io::{Write, stdout};
 
 fn process_command(
-    commands: Vec<Command>,
+    mut commands: Vec<Command>,
     background: bool,
     state: &mut ShellState,
 ) -> ShellResult<()> {
-    for command in &commands {
-        if !command.is_valid() {
-            stdout()
-                .write_all(format!("{}: command not found\n", &command.program).as_bytes())
-                .unwrap();
-            return Err(crate::error::ShellError::CommandNotFound(
-                command.program.clone(),
-            ));
+    let _ = commands.iter_mut().try_for_each(|c| {
+        if !c.find_binary_from_path() {
+            return Err(crate::error::ShellError::CommandNotFound(c.program.clone()));
         }
-    }
-    execute_command(&commands, background, state);
+        Ok(())
+    });
+
+    spawn_pipeline(&commands, background, state);
     Ok(())
 }
 
 fn main() {
-    let mut state = ShellState {
-        jobs: vec![],
-        recent_id: 0,
-    };
+    set_signals_for_parent();
+    let mut state = ShellState::new();
     let mut repl = Repl::new().expect("Failed to initialize REPL");
+    loop {
+        if let Some(pipeline) = get_pipeline(&mut repl, &mut state) {
+            let _ = process_command(pipeline.commands, pipeline.background, &mut state);
+        }
+    }
+}
 
+fn set_signals_for_parent() {
     unsafe {
         signal(Signal::SIGTSTP, SigHandler::SigIgn).unwrap();
     }
-    loop {
-        match repl.read_and_parse() {
-            Some(tokens) => {
-                if let Some(pipeline) = parse_pipelines(tokens) {
-                    if cfg!(debug_assertions) {
-                        println!("{:?}", pipeline.commands);
-                    }
-                    let _ = process_command(pipeline.commands, pipeline.background, &mut state);
-                }
+}
+
+fn get_pipeline(repl: &mut Repl, state: &mut ShellState) -> Option<Pipeline> {
+    match repl.read_and_parse() {
+        Some(tokens) => Some(parse_tokens(tokens)),
+        None => {
+            if ok_to_exit(state) {
+                exit(0);
             }
-            None => {
-                if ok_to_exit(&mut state) {
-                    break;
-                }
-                println!("There are things to be done..");
-            }
+            println!("There are things to be done..");
+            None
         }
     }
 }
