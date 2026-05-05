@@ -61,7 +61,7 @@ impl TokenStream {
         }
     }
 
-    fn is_done(&self) -> bool {
+    fn _is_done(&self) -> bool {
         self.pos >= self.tokens.len()
     }
 }

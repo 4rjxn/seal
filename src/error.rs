@@ -4,8 +4,8 @@ use thiserror::Error;
 pub enum ShellError {
     #[error("command not found: {0}")]
     CommandNotFound(String),
-    #[error("invalid builtin: {0}")]
-    InvalidBuiltin(String),
+    //#[error("invalid builtin: {0}")]
+    //InvalidBuiltin(String),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     #[error("system error: {0}")]

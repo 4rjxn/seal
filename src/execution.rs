@@ -5,21 +5,20 @@ use std::{
 };
 
 use nix::{
-    libc::{STDIN_FILENO, STDOUT_FILENO, dup2, getpgrp, setpgid, tcsetpgrp},
-    sys::{
-        signal::{SigHandler, Signal, signal},
-        wait::{WaitStatus, waitpid},
-    },
-    unistd::{Pid, close, execvp, fork, pipe},
+    libc::{STDIN_FILENO, STDOUT_FILENO, dup2, setpgid},
+    sys::signal::{SigHandler, Signal, signal},
+    unistd::{Pid, execvp, fork, pipe},
 };
 
 use crate::{
     builtins::run_builtin,
-    models::{Builtins, Command, CommandKind, ShellState},
+    models::{Builtins, Command, CommandKind, Job, JobStatus, ShellState},
     redirection::set_redirection,
+    utils::is_builtin,
+    wait_process::wait_for_process,
 };
 
-pub fn spawn_pipeline(commands: &Vec<Command>, background: bool, state: &mut ShellState) {
+pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: &mut ShellState) {
     let mut pgid: Option<Pid> = None;
     let mut prev_read: Option<OwnedFd> = None;
     let mut children = Vec::new();
@@ -29,66 +28,70 @@ pub fn spawn_pipeline(commands: &Vec<Command>, background: bool, state: &mut She
         let (read_end, write_end) = make_pipe_if_needed(has_next);
         match command.kind() {
             CommandKind::Builtin(builtin) => {
-                run_builtin_inline(command, state, builtin, prev_read, write_end);
+                run_builtin_inline(
+                    command,
+                    state,
+                    builtin,
+                    prev_read.as_ref(),
+                    write_end.as_ref(),
+                );
                 prev_read = read_end;
             }
             CommandKind::External => {
                 spawn_external(
                     command,
                     &mut pgid,
-                    prev_read,
-                    write_end,
-                    read_end,
+                    prev_read.as_ref(),
+                    write_end.as_ref(),
+                    read_end.as_ref(),
                     &mut children,
                 );
-                prev_read = None;
+                prev_read = read_end;
             }
         }
     }
-    wait_for_children(&children, pgid);
+
+    if let Some(job) = generate_job(pgid, state, commands.last().unwrap(), &mut children) {
+        wait_for_process(job, state);
+    }
 }
 
-fn wait_for_children(children: &[Pid], pgid: Option<Pid>) {
-    for &child in children {
-        match waitpid(child, None) {
-            Ok(status) => handle_wait_status(status),
-            Err(e) => eprintln!("waitpid failed: {}", e),
-        }
+fn generate_job(
+    pgid: Option<Pid>,
+    state: &mut ShellState,
+    command: &Command,
+    children: &mut Vec<Pid>,
+) -> Option<Job> {
+    if is_builtin(&command.program).is_some() {
+        return None;
     }
-    // give terminal control back to the shell
-    if let Some(_) = pgid {
-        unsafe { tcsetpgrp(STDIN_FILENO, getpgrp()) };
-    }
-}
-fn handle_wait_status(status: WaitStatus) {
-    match status {
-        WaitStatus::Exited(_, code) if code != 0 => {
-            eprintln!("process exited with code {}", code);
-        }
-        WaitStatus::Signaled(_, sig, _) => {
-            eprintln!("process killed by signal {}", sig);
-        }
-        _ => {}
-    }
+    let job = Job {
+        id: state.jobs.len() + 1,
+        pgid: Pid::from_raw(pgid.unwrap().into()),
+        status: JobStatus::Running,
+        command: command.clone(),
+        childrens: children.to_owned(),
+    };
+    Some(job)
 }
 
 fn run_builtin_inline(
     command: &Command,
     state: &mut ShellState,
     builtin: Builtins,
-    stdin: Option<OwnedFd>,
-    stdout: Option<OwnedFd>,
+    stdin: Option<&OwnedFd>,
+    stdout: Option<&OwnedFd>,
 ) {
     unsafe { wire_fds(stdin, stdout, None) }
-    run_builtin(&command, state, builtin);
+    let _ = run_builtin(&command, state, builtin);
 }
 
 fn spawn_external(
     command: &Command,
     pgid: &mut Option<Pid>,
-    prev_read: Option<OwnedFd>,
-    write_end: Option<OwnedFd>,
-    read_end: Option<OwnedFd>,
+    prev_read: Option<&OwnedFd>,
+    write_end: Option<&OwnedFd>,
+    read_end: Option<&OwnedFd>,
     children: &mut Vec<Pid>,
 ) {
     match unsafe { fork() } {
@@ -97,36 +100,24 @@ fn spawn_external(
             child_exec(command);
         }
         Ok(nix::unistd::ForkResult::Parent { child }) => {
-            parent_cleanup(child, pgid, prev_read, write_end, children);
+            parent_cleanup(child, pgid, children);
         }
         Err(e) => eprintln!("Fork failed!! err: {}", e),
     }
 }
 
-fn parent_cleanup(
-    child: Pid,
-    pgid: &mut Option<Pid>,
-    prev_read: Option<OwnedFd>,
-    write_end: Option<OwnedFd>,
-    children: &mut Vec<Pid>,
-) {
+fn parent_cleanup(child: Pid, pgid: &mut Option<Pid>, children: &mut Vec<Pid>) {
     if pgid.is_none() {
         *pgid = Some(child);
-    }
-    if let Some(r) = prev_read {
-        close(r).unwrap();
-    }
-    if let Some(w) = write_end {
-        close(w).unwrap();
     }
     children.push(child);
 }
 
 fn child_setup(
     pgid: Option<Pid>,
-    prev_read: Option<OwnedFd>,
-    write_end: Option<OwnedFd>,
-    read_end: Option<OwnedFd>,
+    prev_read: Option<&OwnedFd>,
+    write_end: Option<&OwnedFd>,
+    read_end: Option<&OwnedFd>,
 ) {
     unsafe {
         reset_child_signals();
@@ -146,7 +137,12 @@ fn child_exec(command: &Command) {
         .iter()
         .map(|a| CString::new(a.as_bytes()).unwrap())
         .collect();
-    execvp(&c, &cargs).unwrap();
+    match execvp(&c, &cargs) {
+        Ok(_) => {}
+        Err(_) => {
+            println!("{}: command not found", command.program)
+        }
+    }
     process::exit(1);
 }
 
@@ -165,21 +161,19 @@ fn reset_child_signals() {
     }
 }
 
-unsafe fn wire_fds(stdin: Option<OwnedFd>, stdout: Option<OwnedFd>, read_end: Option<OwnedFd>) {
-    if let Some(r) = &stdin {
+unsafe fn wire_fds(stdin: Option<&OwnedFd>, stdout: Option<&OwnedFd>, read_end: Option<&OwnedFd>) {
+    if let Some(r) = stdin {
         unsafe {
             dup2(r.as_raw_fd(), STDIN_FILENO);
-            close(r.as_raw_fd()).unwrap();
         }
     }
     if let Some(w) = stdout {
         unsafe {
             dup2(w.as_raw_fd(), STDOUT_FILENO);
-            close(w.as_raw_fd()).unwrap();
         }
     }
-    if let Some(r) = read_end {
-        close(r).unwrap();
+    if let Some(_r) = read_end {
+        // No need to close here, OwnedFd will handle it or it will be closed on exec
     }
 }
 

@@ -9,8 +9,7 @@ use crate::{
     utils::print_job,
 };
 
-pub fn wait_for_process(job: Job, state: &mut ShellState) {
-    let mut job = job;
+pub fn wait_for_process(mut job: Job, state: &mut ShellState) {
     unsafe {
         tcsetpgrp(STDIN_FILENO, job.pgid.into());
     }
