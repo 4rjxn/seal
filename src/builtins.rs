@@ -74,24 +74,27 @@ pub fn job_builtin(state: ShellStateType) {
 //}
 
 fn fg_builtin(command: &Command, state: ShellStateType) {
-    let mut s = state.borrow_mut();
-    let job = if let Some(arg) = command.args.get(1) {
-        if let Ok(id) = arg.parse::<usize>() {
-            s.jobs
-                .iter()
-                .position(|job| job.id == id)
-                .map(|pos| s.jobs.remove(pos))
+    let job = {
+        let mut s = state.borrow_mut();
+        if let Some(arg) = command.args.get(1) {
+            if let Ok(id) = arg.parse::<usize>() {
+                s.jobs
+                    .iter()
+                    .position(|job| job.id == id)
+                    .map(|pos| s.jobs.remove(pos))
+            } else {
+                None
+            }
         } else {
-            None
+            s.jobs.pop()
         }
-    } else {
-        s.jobs.pop()
     };
     match job {
         Some(job) => unsafe {
             give_terminal_to_job(job.pgid);
             killpg(job.pgid.as_raw(), SIGCONT);
             wait_for_process(job, Rc::clone(&state));
+            let mut s = state.borrow_mut();
             if let Some(job) = s.jobs.last() {
                 s.recent_id = job.id
             }
