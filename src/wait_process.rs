@@ -10,9 +10,6 @@ use crate::{
 };
 
 pub fn wait_for_process(mut job: Job, state: &mut ShellState) {
-    unsafe {
-        tcsetpgrp(STDIN_FILENO, job.pgid.into());
-    }
     let mut suspended = false;
     for child in &job.childrens {
         loop {

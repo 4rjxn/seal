@@ -14,7 +14,7 @@ use crate::{
     builtins::run_builtin,
     models::{Builtins, Command, CommandKind, Job, JobStatus, ShellState},
     redirection::set_redirection,
-    utils::is_builtin,
+    utils::{give_terminal_to_job, is_builtin},
     wait_process::wait_for_process,
 };
 
@@ -52,6 +52,7 @@ pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: &mut Sh
     }
 
     if let Some(job) = generate_job(pgid, state, commands.last().unwrap(), &mut children) {
+        give_terminal_to_job(job.pgid);
         wait_for_process(job, state);
     }
 }
