@@ -1,7 +1,7 @@
 use crate::error::{ShellError, ShellResult};
 use crate::models::JobStatus;
 use crate::types::ShellStateType;
-use crate::utils::{get_path_from_env, give_terminal_to_job, ok_to_exit, print_job};
+use crate::utils::{get_path_from_env, give_terminal_to_job, ok_to_exit, print_job, read_file};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{
@@ -118,8 +118,7 @@ fn cd_builtin(command: &Command) -> ShellResult<()> {
 }
 
 fn lua_builtin(command: &Command, state: ShellStateType) -> ShellResult<()> {
-    let script = command.args[1..].join(" ");
-
+    let mut script = command.args[1..].join(" ");
     let engine = {
         let state_ref = state.borrow();
 
@@ -130,6 +129,15 @@ fn lua_builtin(command: &Command, state: ShellStateType) -> ShellResult<()> {
         state_ref.lua_engine.as_ref().unwrap().clone()
     };
 
+    if command.args[1].ends_with(".lua") {
+        match read_file(&command.args[1]) {
+            Ok(s) => script = s,
+            Err(_) => {
+                eprintln!("script file io error.");
+                return Err(ShellError::LuaError);
+            }
+        }
+    }
     match engine.run_luastr(&script) {
         Ok(_) => {}
         Err(e) => {

@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf, rc::Rc};
+use std::{env, fs, path::PathBuf, rc::Rc};
 
 use is_executable::IsExecutable;
 use nix::{
@@ -59,6 +59,10 @@ pub fn current_absolute_path(command: &String) -> ShellResult<PathBuf> {
     let command = command.replace("./", "");
     let curr_dir = env::current_dir().unwrap();
     return Ok(PathBuf::from(curr_dir).join(command));
+}
+
+pub fn read_file(path: &str) -> Result<String, std::io::Error> {
+    fs::read_to_string(path)
 }
 
 pub fn ok_to_exit(state: ShellStateType) -> bool {
