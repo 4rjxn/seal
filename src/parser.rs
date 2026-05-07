@@ -141,4 +141,30 @@ impl Parser {
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use crate::{models::Token, parser::parse_tokens};
+
+    #[test]
+    fn basic_pipeline() {
+        let tokens = vec![
+            Token::Word {
+                value: "ls".to_string(),
+                quoted: false,
+            },
+            Token::Word {
+                value: "-lah".to_string(),
+                quoted: false,
+            },
+            Token::Pipe,
+            Token::Word {
+                value: "less".to_string(),
+                quoted: false,
+            },
+        ];
+        let pipeline = parse_tokens(tokens);
+        assert_eq!(pipeline.commands.len(), 2);
+        assert!(pipeline.commands[0].program.ends_with("ls"));
+        assert!(pipeline.commands[1].program.ends_with("less"));
+        assert_eq!(pipeline.commands[0].args, vec!["ls", "-lah"]);
+    }
+}

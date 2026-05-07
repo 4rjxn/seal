@@ -14,7 +14,10 @@ mod wait_process;
 
 use std::process::exit;
 
-use nix::sys::signal::{SigHandler, Signal, signal};
+use nix::{
+    libc::{getpid, setpgid},
+    sys::signal::{SigHandler, Signal, signal},
+};
 
 use crate::{
     error::ShellResult,
@@ -22,7 +25,7 @@ use crate::{
     models::{Command, Pipeline, ShellState},
     parser::parse_tokens,
     repl::Repl,
-    utils::ok_to_exit,
+    utils::{ok_to_exit, set_terminal_leader},
 };
 
 fn process_command(
@@ -43,6 +46,10 @@ fn process_command(
 
 fn main() {
     set_signals_for_parent();
+    unsafe {
+        setpgid(getpid(), getpid());
+    }
+    set_terminal_leader();
     let mut state = ShellState::new();
     let mut repl = Repl::new().expect("Failed to initialize REPL");
     loop {
@@ -55,6 +62,8 @@ fn main() {
 fn set_signals_for_parent() {
     unsafe {
         signal(Signal::SIGTSTP, SigHandler::SigIgn).unwrap();
+        signal(Signal::SIGTTOU, SigHandler::SigIgn).unwrap();
+        signal(Signal::SIGTTIN, SigHandler::SigIgn).unwrap();
     }
 }
 

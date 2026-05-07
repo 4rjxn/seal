@@ -1,6 +1,6 @@
 use crate::error::ShellResult;
 use crate::models::JobStatus;
-use crate::utils::{get_path_from_env, ok_to_exit, print_job};
+use crate::utils::{get_path_from_env, give_terminal_to_job, ok_to_exit, print_job};
 use std::path::PathBuf;
 use std::{
     env,
@@ -82,6 +82,7 @@ fn fg_builtin(command: &Command, state: &mut ShellState) {
     };
     match job {
         Some(job) => unsafe {
+            give_terminal_to_job(job.pgid);
             killpg(job.pgid.as_raw(), SIGCONT);
             wait_for_process(job, state);
             if let Some(job) = state.jobs.last() {

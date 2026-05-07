@@ -1,12 +1,29 @@
 use std::{env, path::PathBuf};
 
 use is_executable::IsExecutable;
+use nix::{
+    libc::{STDIN_FILENO, getpgrp, tcsetpgrp},
+    unistd::Pid,
+};
 
 use crate::{
     builtins::job_builtin,
     error::{ShellError, ShellResult},
     models::{Builtins, Job, JobStatus, ShellState},
 };
+
+pub fn set_terminal_leader() {
+    unsafe {
+        let pgid = getpgrp();
+        tcsetpgrp(STDIN_FILENO, pgid);
+    }
+}
+
+pub fn give_terminal_to_job(pid: Pid) {
+    unsafe {
+        tcsetpgrp(STDIN_FILENO, pid.as_raw());
+    }
+}
 
 pub fn get_path_from_env(command: &String) -> ShellResult<PathBuf> {
     match env::var_os("PATH") {

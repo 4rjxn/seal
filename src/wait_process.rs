@@ -1,18 +1,14 @@
 use nix::{
     errno::Errno,
-    libc::{STDIN_FILENO, getpgid, getpid, tcsetpgrp},
     sys::wait::{WaitPidFlag, WaitStatus, waitpid},
 };
 
 use crate::{
     models::{Job, JobStatus, ShellState},
-    utils::print_job,
+    utils::{print_job, set_terminal_leader},
 };
 
 pub fn wait_for_process(mut job: Job, state: &mut ShellState) {
-    unsafe {
-        tcsetpgrp(STDIN_FILENO, job.pgid.into());
-    }
     let mut suspended = false;
     for child in &job.childrens {
         loop {
@@ -33,7 +29,5 @@ pub fn wait_for_process(mut job: Job, state: &mut ShellState) {
         print_job(&job, state.recent_id);
         state.jobs.push(job);
     }
-    unsafe {
-        tcsetpgrp(STDIN_FILENO, getpgid(getpid()));
-    }
+    set_terminal_leader();
 }
