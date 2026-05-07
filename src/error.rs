@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ShellError {
+    #[error("Lua engine Error.")]
+    LuaError,
     #[error("command not found: {0}")]
     CommandNotFound(String),
     //#[error("invalid builtin: {0}")]

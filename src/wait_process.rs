@@ -4,11 +4,13 @@ use nix::{
 };
 
 use crate::{
-    models::{Job, JobStatus, ShellState},
+    models::{Job, JobStatus},
+    types::ShellStateType,
     utils::{print_job, set_terminal_leader},
 };
 
-pub fn wait_for_process(mut job: Job, state: &mut ShellState) {
+pub fn wait_for_process(mut job: Job, state: ShellStateType) {
+    let mut state = state.borrow_mut();
     let mut suspended = false;
     for child in &job.childrens {
         loop {

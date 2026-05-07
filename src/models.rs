@@ -1,9 +1,11 @@
-use std::path::PathBuf;
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use nix::unistd::Pid;
 
 use crate::{
     error::ShellResult,
+    lua_engine::LuaEngine,
+    types::ShellStateType,
     utils::{current_absolute_path, get_path_from_env, is_builtin},
 };
 
@@ -14,6 +16,7 @@ pub struct Pipeline {
 
 pub enum Builtins {
     Echo,
+    Lua,
     Exit,
     Type,
     Pwd,
@@ -25,14 +28,20 @@ pub enum Builtins {
 pub struct ShellState {
     pub recent_id: usize,
     pub jobs: Vec<Job>,
+    pub lua_engine: Option<Rc<LuaEngine>>,
 }
 
 impl ShellState {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> ShellStateType {
+        let state = Self {
             recent_id: 0,
             jobs: vec![],
-        }
+            lua_engine: None,
+        };
+        let state = Rc::new(RefCell::new(state));
+        let mut s = state.borrow_mut();
+        s.lua_engine = Some(Rc::new(LuaEngine::new(Rc::clone(&state))));
+        Rc::clone(&state)
     }
 }
 

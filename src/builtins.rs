@@ -1,7 +1,9 @@
-use crate::error::ShellResult;
+use crate::error::{ShellError, ShellResult};
 use crate::models::JobStatus;
+use crate::types::ShellStateType;
 use crate::utils::{get_path_from_env, give_terminal_to_job, ok_to_exit, print_job};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::{
     env,
     io::{Write, stdout},
@@ -12,13 +14,13 @@ use nix::libc::{SIGCONT, killpg};
 use nix::sys::wait::{WaitPidFlag, WaitStatus, waitpid};
 
 use crate::{
-    models::{Builtins, Command, ShellState},
+    models::{Builtins, Command},
     wait_process::wait_for_process,
 };
 
 pub fn run_builtin(
     command: &Command,
-    state: &mut ShellState,
+    state: ShellStateType,
     builtin_type: Builtins,
 ) -> ShellResult<()> {
     match builtin_type {
@@ -43,22 +45,27 @@ pub fn run_builtin(
         Builtins::Jobs => {
             job_builtin(state);
         }
+        Builtins::Lua => {
+            lua_builtin(command, state)?;
+        }
     }
     Ok(())
 }
 
-pub fn job_builtin(state: &mut ShellState) {
+pub fn job_builtin(state: ShellStateType) {
+    let mut state = state.borrow_mut();
     if state.jobs.is_empty() {
         return;
     }
-    for job in &mut state.jobs {
+    let recent_id = state.recent_id;
+    state.jobs.iter_mut().for_each(|job| {
         match waitpid(job.pgid, Some(WaitPidFlag::WNOHANG)) {
             Ok(WaitStatus::Exited(_, _)) => job.status = JobStatus::Done,
             Ok(_) => {}
             Err(_) => {}
         }
-        print_job(job, state.recent_id);
-    }
+        print_job(&job, recent_id);
+    });
     state.jobs.retain(|j| !matches!(j.status, JobStatus::Done));
 }
 
@@ -66,27 +73,27 @@ pub fn job_builtin(state: &mut ShellState) {
 //    todo!();
 //}
 
-fn fg_builtin(command: &Command, state: &mut ShellState) {
+fn fg_builtin(command: &Command, state: ShellStateType) {
+    let mut s = state.borrow_mut();
     let job = if let Some(arg) = command.args.get(1) {
         if let Ok(id) = arg.parse::<usize>() {
-            state
-                .jobs
+            s.jobs
                 .iter()
                 .position(|job| job.id == id)
-                .map(|pos| state.jobs.remove(pos))
+                .map(|pos| s.jobs.remove(pos))
         } else {
             None
         }
     } else {
-        state.jobs.pop()
+        s.jobs.pop()
     };
     match job {
         Some(job) => unsafe {
             give_terminal_to_job(job.pgid);
             killpg(job.pgid.as_raw(), SIGCONT);
-            wait_for_process(job, state);
-            if let Some(job) = state.jobs.last() {
-                state.recent_id = job.id
+            wait_for_process(job, Rc::clone(&state));
+            if let Some(job) = s.jobs.last() {
+                s.recent_id = job.id
             }
         },
         None => {
@@ -110,7 +117,29 @@ fn cd_builtin(command: &Command) -> ShellResult<()> {
     }
 }
 
-fn exit_builtin(state: &mut ShellState) {
+fn lua_builtin(command: &Command, state: ShellStateType) -> ShellResult<()> {
+    let script = command.args[1..].join(" ");
+
+    let engine = {
+        let state_ref = state.borrow();
+
+        if state_ref.lua_engine.is_none() {
+            return Err(ShellError::LuaError);
+        }
+
+        state_ref.lua_engine.as_ref().unwrap().clone()
+    };
+
+    match engine.run_luastr(&script) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("{}", e);
+        }
+    };
+    Ok(())
+}
+
+fn exit_builtin(state: ShellStateType) {
     if ok_to_exit(state) {
         process::exit(0)
     } else {

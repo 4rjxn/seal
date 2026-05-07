@@ -2,6 +2,7 @@ use std::{
     ffi::CString,
     os::fd::{AsRawFd, OwnedFd},
     process,
+    rc::Rc,
 };
 
 use nix::{
@@ -12,13 +13,14 @@ use nix::{
 
 use crate::{
     builtins::run_builtin,
-    models::{Builtins, Command, CommandKind, Job, JobStatus, ShellState},
+    models::{Builtins, Command, CommandKind, Job, JobStatus},
     redirection::set_redirection,
+    types::ShellStateType,
     utils::{give_terminal_to_job, is_builtin},
     wait_process::wait_for_process,
 };
 
-pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: &mut ShellState) {
+pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: ShellStateType) {
     let mut pgid: Option<Pid> = None;
     let mut prev_read: Option<OwnedFd> = None;
     let mut children = Vec::new();
@@ -30,7 +32,7 @@ pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: &mut Sh
             CommandKind::Builtin(builtin) => {
                 run_builtin_inline(
                     command,
-                    state,
+                    Rc::clone(&state),
                     builtin,
                     prev_read.as_ref(),
                     write_end.as_ref(),
@@ -51,7 +53,12 @@ pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: &mut Sh
         }
     }
 
-    if let Some(job) = generate_job(pgid, state, commands.last().unwrap(), &mut children) {
+    if let Some(job) = generate_job(
+        pgid,
+        Rc::clone(&state),
+        commands.last().unwrap(),
+        &mut children,
+    ) {
         give_terminal_to_job(job.pgid);
         wait_for_process(job, state);
     }
@@ -59,10 +66,11 @@ pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: &mut Sh
 
 fn generate_job(
     pgid: Option<Pid>,
-    state: &mut ShellState,
+    state: ShellStateType,
     command: &Command,
     children: &mut Vec<Pid>,
 ) -> Option<Job> {
+    let state = state.borrow_mut();
     if is_builtin(&command.program).is_some() {
         return None;
     }
@@ -78,7 +86,7 @@ fn generate_job(
 
 fn run_builtin_inline(
     command: &Command,
-    state: &mut ShellState,
+    state: ShellStateType,
     builtin: Builtins,
     stdin: Option<&OwnedFd>,
     stdout: Option<&OwnedFd>,

@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, rc::Rc};
 
 use is_executable::IsExecutable;
 use nix::{
@@ -9,7 +9,8 @@ use nix::{
 use crate::{
     builtins::job_builtin,
     error::{ShellError, ShellResult},
-    models::{Builtins, Job, JobStatus, ShellState},
+    models::{Builtins, Job, JobStatus},
+    types::ShellStateType,
 };
 
 pub fn set_terminal_leader() {
@@ -46,6 +47,7 @@ pub fn is_builtin(path: &str) -> Option<Builtins> {
         "exit" => Some(Builtins::Exit),
         "type" => Some(Builtins::Type),
         "jobs" => Some(Builtins::Jobs),
+        "slua" => Some(Builtins::Lua),
         "pwd" => Some(Builtins::Pwd),
         "cd" => Some(Builtins::Cd),
         "fg" => Some(Builtins::Fg),
@@ -59,9 +61,10 @@ pub fn current_absolute_path(command: &String) -> ShellResult<PathBuf> {
     return Ok(PathBuf::from(curr_dir).join(command));
 }
 
-pub fn ok_to_exit(state: &mut ShellState) -> bool {
-    job_builtin(state);
-    state.jobs.is_empty()
+pub fn ok_to_exit(state: ShellStateType) -> bool {
+    job_builtin(Rc::clone(&state));
+    let s = state.borrow_mut();
+    s.jobs.is_empty()
 }
 
 pub fn print_job(job: &Job, recent: usize) {

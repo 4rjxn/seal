@@ -3,16 +3,18 @@ mod error;
 mod execution;
 mod file_completion;
 mod lexer;
+mod lua_engine;
 mod models;
 mod parser;
 mod prompt;
 mod redirection;
 mod repl;
 mod traits;
+mod types;
 mod utils;
 mod wait_process;
 
-use std::process::exit;
+use std::{process::exit, rc::Rc};
 
 use nix::{
     libc::{getpid, setpgid},
@@ -25,13 +27,14 @@ use crate::{
     models::{Command, Pipeline, ShellState},
     parser::parse_tokens,
     repl::Repl,
+    types::ShellStateType,
     utils::{ok_to_exit, set_terminal_leader},
 };
 
 fn process_command(
     mut commands: Vec<Command>,
     background: bool,
-    state: &mut ShellState,
+    state: ShellStateType,
 ) -> ShellResult<()> {
     let _ = commands.iter_mut().try_for_each(|c| {
         if !c.find_binary_from_path() {
@@ -50,11 +53,11 @@ fn main() {
         setpgid(getpid(), getpid());
     }
     set_terminal_leader();
-    let mut state = ShellState::new();
+    let state = ShellState::new();
     let mut repl = Repl::new().expect("Failed to initialize REPL");
     loop {
-        if let Some(pipeline) = get_pipeline(&mut repl, &mut state) {
-            let _ = process_command(pipeline.commands, pipeline.background, &mut state);
+        if let Some(pipeline) = get_pipeline(&mut repl, Rc::clone(&state)) {
+            let _ = process_command(pipeline.commands, pipeline.background, Rc::clone(&state));
         }
     }
 }
@@ -67,7 +70,7 @@ fn set_signals_for_parent() {
     }
 }
 
-fn get_pipeline(repl: &mut Repl, state: &mut ShellState) -> Option<Pipeline> {
+fn get_pipeline(repl: &mut Repl, state: ShellStateType) -> Option<Pipeline> {
     match repl.read_and_parse() {
         Some(tokens) => Some(parse_tokens(tokens)),
         None => {
