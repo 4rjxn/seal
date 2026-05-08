@@ -1,6 +1,8 @@
 use std::{
     ffi::CString,
-    os::fd::{AsRawFd, OwnedFd},
+    fs::File,
+    io::Read,
+    os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd},
     process,
     rc::Rc,
 };
@@ -20,14 +22,25 @@ use crate::{
     wait_process::wait_for_process,
 };
 
-pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: ShellStateType) {
+pub fn spawn_pipeline(
+    commands: &Vec<Command>,
+    _background: bool,
+    state: ShellStateType,
+    capture: bool,
+) -> Option<Vec<u8>> {
     let mut pgid: Option<Pid> = None;
     let mut prev_read: Option<OwnedFd> = None;
     let mut children = Vec::new();
     let mut iter = commands.iter().peekable();
+    let (capture_read, capture_write) = make_capture_pip(capture);
     while let Some(command) = iter.next() {
         let has_next = iter.peek().is_some();
         let (read_end, write_end) = make_pipe_if_needed(has_next);
+        let effective_write = if !has_next && capture {
+            capture_write.as_ref()
+        } else {
+            write_end.as_ref()
+        };
         match command.kind() {
             CommandKind::Builtin(builtin) => {
                 run_builtin_inline(
@@ -35,7 +48,7 @@ pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: ShellSt
                     Rc::clone(&state),
                     builtin,
                     prev_read.as_ref(),
-                    write_end.as_ref(),
+                    effective_write,
                 );
                 prev_read = read_end;
             }
@@ -44,13 +57,34 @@ pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: ShellSt
                     command,
                     &mut pgid,
                     prev_read.as_ref(),
-                    write_end.as_ref(),
+                    effective_write,
                     read_end.as_ref(),
                     &mut children,
                 );
                 prev_read = read_end;
             }
         }
+    }
+    if capture {
+        // Drop the write end so reading doesn't block
+        drop(capture_write);
+
+        let mut output = Vec::new();
+        let mut file = unsafe { File::from_raw_fd(capture_read.unwrap().into_raw_fd()) };
+        file.read_to_end(&mut output).ok();
+
+        // Wait for children as usual...
+        if let Some(job) = generate_job(
+            pgid,
+            Rc::clone(&state),
+            commands.last().unwrap(),
+            &mut children,
+        ) {
+            give_terminal_to_job(job.pgid);
+            wait_for_process(job, state);
+        }
+
+        return Some(output);
     }
 
     if let Some(job) = generate_job(
@@ -62,6 +96,7 @@ pub fn spawn_pipeline(commands: &Vec<Command>, _background: bool, state: ShellSt
         give_terminal_to_job(job.pgid);
         wait_for_process(job, state);
     }
+    None
 }
 
 fn generate_job(
@@ -88,11 +123,41 @@ fn run_builtin_inline(
     command: &Command,
     state: ShellStateType,
     builtin: Builtins,
-    stdin: Option<&OwnedFd>,
-    stdout: Option<&OwnedFd>,
+    read_fd: Option<&OwnedFd>,
+    write_fd: Option<&OwnedFd>,
 ) {
-    unsafe { wire_fds(stdin, stdout, None) }
+    // Save original stdout/stdin
+    let saved_stdout = write_fd.map(|_| {
+        let fd = unsafe { OwnedFd::from_raw_fd(nix::libc::dup(1)) };
+        fd
+    });
+    let saved_stdin = read_fd.map(|_| {
+        let fd = unsafe { OwnedFd::from_raw_fd(nix::libc::dup(0)) };
+        fd
+    });
+
+    // Redirect stdin/stdout to the pipe fds
+    unsafe {
+        if let Some(rfd) = read_fd {
+            nix::libc::dup2(rfd.as_raw_fd(), 0);
+        }
+        if let Some(wfd) = write_fd {
+            nix::libc::dup2(wfd.as_raw_fd(), 1);
+        }
+    }
+
+    // Run the builtin — it writes to fd 1 as usual
     let _ = run_builtin(&command, state, builtin);
+
+    // Restore original stdout/stdin
+    unsafe {
+        if let Some(saved) = saved_stdout {
+            nix::libc::dup2(saved.as_raw_fd(), 1);
+        }
+        if let Some(saved) = saved_stdin {
+            nix::libc::dup2(saved.as_raw_fd(), 0);
+        }
+    }
 }
 
 fn spawn_external(
@@ -183,6 +248,15 @@ unsafe fn wire_fds(stdin: Option<&OwnedFd>, stdout: Option<&OwnedFd>, read_end: 
     }
     if let Some(_r) = read_end {
         // No need to close here, OwnedFd will handle it or it will be closed on exec
+    }
+}
+
+fn make_capture_pip(capture: bool) -> (Option<OwnedFd>, Option<OwnedFd>) {
+    if capture {
+        let (r, w) = pipe().expect("failed to create capture pipe");
+        (Some(r), Some(w))
+    } else {
+        (None, None)
     }
 }
 

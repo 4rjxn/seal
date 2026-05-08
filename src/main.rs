@@ -43,7 +43,7 @@ fn process_command(
         Ok(())
     });
 
-    spawn_pipeline(&commands, background, state);
+    spawn_pipeline(&commands, background, state, false);
     Ok(())
 }
 

@@ -86,3 +86,24 @@ pub fn print_job(job: &Job, recent: usize) {
         job.command.args[0]
     );
 }
+
+pub fn extract_script(args: Vec<String>) -> ShellResult<String> {
+    if let Some(arg) = args.get(1)
+        && arg.ends_with(".lua")
+    {
+        match read_file(arg) {
+            Ok(s) => {
+                return Ok(s);
+            }
+            Err(_) => {
+                eprintln!("script file io error.");
+                return Err(ShellError::LuaError);
+            }
+        }
+    }
+    let Some(args) = args.get(1..) else {
+        eprintln!("missing arguments");
+        return Err(ShellError::LuaError);
+    };
+    return Ok(args.join(" "));
+}
