@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf, rc::Rc};
+use std::{env, ffi::CString, fs, path::PathBuf, rc::Rc};
 
 use is_executable::IsExecutable;
 use nix::{
@@ -46,6 +46,7 @@ pub fn is_builtin(path: &str) -> Option<Builtins> {
         "echo" => Some(Builtins::Echo),
         "exit" => Some(Builtins::Exit),
         "type" => Some(Builtins::Type),
+        "exec" => Some(Builtins::Exec),
         "jobs" => Some(Builtins::Jobs),
         "slua" => Some(Builtins::Lua),
         "pwd" => Some(Builtins::Pwd),
@@ -106,4 +107,13 @@ pub fn extract_script(args: Vec<String>) -> ShellResult<String> {
         return Err(ShellError::LuaError);
     };
     return Ok(args.join(" "));
+}
+
+pub fn generate_cmd_cargs(command: &String, args: &[String]) -> (CString, Vec<CString>) {
+    let cmd = CString::new(command.as_bytes()).unwrap();
+    let cargs: Vec<CString> = args
+        .iter()
+        .map(|a| CString::new(a.as_bytes()).unwrap())
+        .collect();
+    (cmd, cargs)
 }

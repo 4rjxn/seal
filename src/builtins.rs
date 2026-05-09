@@ -1,8 +1,10 @@
 use crate::error::{ShellError, ShellResult};
+use crate::execution::exec_command;
 use crate::models::JobStatus;
 use crate::types::ShellStateType;
 use crate::utils::{
-    extract_script, get_path_from_env, give_terminal_to_job, ok_to_exit, print_job,
+    extract_script, generate_cmd_cargs, get_path_from_env, give_terminal_to_job, is_builtin,
+    ok_to_exit, print_job,
 };
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -49,6 +51,9 @@ pub fn run_builtin(
         }
         Builtins::Lua => {
             lua_builtin(command, state)?;
+        }
+        Builtins::Exec => {
+            exec_builtin(command)?;
         }
     }
     Ok(())
@@ -173,7 +178,11 @@ fn type_builtin(command: &Command) -> ShellResult<()> {
             }
             Err(_) => (),
         }
-        stdout().write_all(format!("{}: not found\n", command.args[1]).as_bytes())?;
+        if is_builtin(&command.args[1]).is_some() {
+            stdout().write_all(format!("{} is a shell builtin\n", command.args[1]).as_bytes())?;
+        } else {
+            stdout().write_all(format!("{}: not found\n", command.args[1]).as_bytes())?;
+        }
     }
     Ok(())
 }
@@ -181,5 +190,14 @@ fn type_builtin(command: &Command) -> ShellResult<()> {
 fn pwd_builtin() -> ShellResult<()> {
     let path = env::current_dir()?;
     println!("{}", path.to_str().unwrap());
+    Ok(())
+}
+
+fn exec_builtin(command: &Command) -> ShellResult<()> {
+    if command.args.get(1).is_none() {
+        return Ok(());
+    }
+    let (cmd, cargs) = generate_cmd_cargs(&command.args[1], &command.args[1..]);
+    exec_command(cmd, cargs);
     Ok(())
 }

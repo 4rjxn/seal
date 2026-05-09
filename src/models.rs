@@ -22,6 +22,7 @@ pub enum Builtins {
     Pwd,
     Cd,
     Fg,
+    Exec,
     Jobs,
 }
 

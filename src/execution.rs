@@ -18,7 +18,7 @@ use crate::{
     models::{Builtins, Command, CommandKind, Job, JobStatus},
     redirection::set_redirection,
     types::ShellStateType,
-    utils::{give_terminal_to_job, is_builtin},
+    utils::{generate_cmd_cargs, give_terminal_to_job, is_builtin},
     wait_process::wait_for_process,
 };
 
@@ -205,18 +205,8 @@ fn child_exec(command: &Command) {
         eprintln!("redirection error!! err: {}", e);
         process::exit(1);
     }
-    let c = CString::new(command.program.as_bytes()).unwrap();
-    let cargs: Vec<CString> = command
-        .args
-        .iter()
-        .map(|a| CString::new(a.as_bytes()).unwrap())
-        .collect();
-    match execvp(&c, &cargs) {
-        Ok(_) => {}
-        Err(_) => {
-            println!("{}: command not found", command.program)
-        }
-    }
+    let (cmd, cargs) = generate_cmd_cargs(&command.program, &command.args);
+    exec_command(cmd, cargs);
     process::exit(1);
 }
 
@@ -269,6 +259,15 @@ fn make_pipe_if_needed(has_next: bool) -> (Option<OwnedFd>, Option<OwnedFd>) {
         Err(e) => {
             eprintln!("pipe creation failed! err: {}", e);
             return (None, None);
+        }
+    }
+}
+
+pub fn exec_command(cmd: CString, cargs: Vec<CString>) {
+    match execvp(&cmd, &cargs) {
+        Ok(_) => {}
+        Err(_) => {
+            println!("{}: command not found", cmd.to_string_lossy())
         }
     }
 }
