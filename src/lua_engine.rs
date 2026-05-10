@@ -70,7 +70,7 @@ impl LuaEngine {
 
 fn run_pipeline_from_str(str: &str, state: ShellStateType, capture: bool) -> Option<String> {
     let tokens = tokenize(str);
-    let command_pipeline = parse_tokens(tokens);
+    let command_pipeline = parse_tokens(tokens, state.clone());
     let output_data = spawn_pipeline(
         &command_pipeline.commands,
         command_pipeline.background,

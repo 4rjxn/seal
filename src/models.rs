@@ -47,6 +47,15 @@ impl ShellState {
         s.lua_engine = Some(Rc::new(LuaEngine::new(Rc::clone(&state))));
         Rc::clone(&state)
     }
+    pub fn set_env(&mut self, k: String, v: String) {
+        let _ = self.env_vars.insert(k, v);
+    }
+    pub fn get_env(&self, k: &String) -> Option<String> {
+        match self.env_vars.get(k) {
+            Some(env) => Some(env.clone()),
+            None => None,
+        }
+    }
 }
 
 #[derive(Clone)]

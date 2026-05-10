@@ -1,10 +1,13 @@
+use std::rc::Rc;
+
 use crate::{
     models::{Command, Pipeline, Redirect, RedirectKind, Token},
     traits::Expantions,
+    types::ShellStateType,
 };
 
-pub fn parse_tokens(tokens: Vec<Token>) -> Pipeline {
-    let mut parser = Parser::new(tokens);
+pub fn parse_tokens(tokens: Vec<Token>, state: ShellStateType) -> Pipeline {
+    let mut parser = Parser::new(tokens, state);
     parser.parse()
 }
 
@@ -12,14 +15,16 @@ pub fn parse_tokens(tokens: Vec<Token>) -> Pipeline {
 struct Parser {
     stream: TokenStream,
     is_background: bool,
+    state: ShellStateType,
 }
 
 impl Parser {
-    pub fn new(input: Vec<Token>) -> Self {
+    pub fn new(input: Vec<Token>, state: ShellStateType) -> Self {
         let stream = TokenStream::new(input);
         Self {
             stream,
             is_background: false,
+            state,
         }
     }
 
@@ -112,7 +117,10 @@ impl Parser {
             if *quoted {
                 args.push(value.clone());
             } else {
-                let expanded = value.expand_path().expand_glob();
+                let expanded = value
+                    .expand_path()
+                    .expand_env(Rc::clone(&self.state))
+                    .expand_glob();
                 args.extend(expanded);
             }
         }

@@ -72,7 +72,7 @@ fn set_signals_for_parent() {
 
 fn get_pipeline(repl: &mut Repl, state: ShellStateType) -> Option<Pipeline> {
     match repl.read_and_parse() {
-        Some(tokens) => Some(parse_tokens(tokens)),
+        Some(tokens) => Some(parse_tokens(tokens, state.clone())),
         None => {
             if ok_to_exit(state) {
                 exit(0);

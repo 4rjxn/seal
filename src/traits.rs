@@ -1,8 +1,11 @@
 use std::{env, fs::read_dir, path::PathBuf};
 
+use crate::types::ShellStateType;
+
 pub trait Expantions {
     fn expand_glob(&self) -> Vec<String>;
     fn expand_path(&self) -> String;
+    fn expand_env(&self, state: ShellStateType) -> String;
 }
 
 fn match_pattern(data: &str, pat: &str) -> bool {
@@ -75,6 +78,23 @@ impl Expantions for String {
     fn expand_path(&self) -> String {
         let home = env::var("HOME").unwrap_or_else(|_| "/".to_string());
         self.replacen("~", &home, 1)
+    }
+
+    fn expand_env(&self, state: ShellStateType) -> String {
+        if self.starts_with("$") {
+            let k = self.strip_prefix("$").unwrap();
+            let val = {
+                let s = state.borrow();
+                s.get_env(&k.to_string())
+            };
+            match val {
+                Some(v) => {
+                    return v;
+                }
+                None => {}
+            };
+        }
+        self.clone()
     }
 }
 
