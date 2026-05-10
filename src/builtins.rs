@@ -4,7 +4,7 @@ use crate::models::JobStatus;
 use crate::types::ShellStateType;
 use crate::utils::{
     extract_script, generate_cmd_cargs, get_path_from_env, give_terminal_to_job, is_builtin,
-    ok_to_exit, print_job,
+    ok_to_exit, print_job, vars_map_to_list,
 };
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -53,7 +53,7 @@ pub fn run_builtin(
             lua_builtin(command, state)?;
         }
         Builtins::Exec => {
-            exec_builtin(command)?;
+            exec_builtin(command, state)?;
         }
     }
     Ok(())
@@ -193,11 +193,15 @@ fn pwd_builtin() -> ShellResult<()> {
     Ok(())
 }
 
-fn exec_builtin(command: &Command) -> ShellResult<()> {
+fn exec_builtin(command: &Command, state: ShellStateType) -> ShellResult<()> {
     if command.args.get(1).is_none() {
         return Ok(());
     }
     let (cmd, cargs) = generate_cmd_cargs(&command.args[1], &command.args[1..]);
-    exec_command(cmd, cargs);
+    let vars = {
+        let s = state.borrow();
+        vars_map_to_list(&s.env_vars)
+    };
+    exec_command(cmd, cargs, vars);
     Ok(())
 }

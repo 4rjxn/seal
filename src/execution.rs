@@ -10,7 +10,7 @@ use std::{
 use nix::{
     libc::{STDIN_FILENO, STDOUT_FILENO, dup2, setpgid},
     sys::signal::{SigHandler, Signal, signal},
-    unistd::{Pid, execvp, fork, pipe},
+    unistd::{Pid, execve, fork, pipe},
 };
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
     models::{Builtins, Command, CommandKind, Job, JobStatus},
     redirection::set_redirection,
     types::ShellStateType,
-    utils::{generate_cmd_cargs, give_terminal_to_job, is_builtin},
+    utils::{generate_cmd_cargs, give_terminal_to_job, is_builtin, vars_map_to_list},
     wait_process::wait_for_process,
 };
 
@@ -55,6 +55,7 @@ pub fn spawn_pipeline(
             CommandKind::External => {
                 spawn_external(
                     command,
+                    Rc::clone(&state),
                     &mut pgid,
                     prev_read.as_ref(),
                     effective_write,
@@ -162,6 +163,7 @@ fn run_builtin_inline(
 
 fn spawn_external(
     command: &Command,
+    state: ShellStateType,
     pgid: &mut Option<Pid>,
     prev_read: Option<&OwnedFd>,
     write_end: Option<&OwnedFd>,
@@ -171,7 +173,7 @@ fn spawn_external(
     match unsafe { fork() } {
         Ok(nix::unistd::ForkResult::Child) => {
             child_setup(*pgid, prev_read, write_end, read_end);
-            child_exec(command);
+            child_exec(command, state);
         }
         Ok(nix::unistd::ForkResult::Parent { child }) => {
             parent_cleanup(child, pgid, children);
@@ -200,13 +202,17 @@ fn child_setup(
     }
 }
 
-fn child_exec(command: &Command) {
+fn child_exec(command: &Command, state: ShellStateType) {
     if let Err(e) = set_redirection(command) {
         eprintln!("redirection error!! err: {}", e);
         process::exit(1);
     }
     let (cmd, cargs) = generate_cmd_cargs(&command.program, &command.args);
-    exec_command(cmd, cargs);
+    let vars = {
+        let s = state.borrow();
+        vars_map_to_list(&s.env_vars)
+    };
+    exec_command(cmd, cargs, vars);
     process::exit(1);
 }
 
@@ -263,8 +269,8 @@ fn make_pipe_if_needed(has_next: bool) -> (Option<OwnedFd>, Option<OwnedFd>) {
     }
 }
 
-pub fn exec_command(cmd: CString, cargs: Vec<CString>) {
-    match execvp(&cmd, &cargs) {
+pub fn exec_command(cmd: CString, cargs: Vec<CString>, vars: Vec<CString>) {
+    match execve(&cmd, &cargs, &vars) {
         Ok(_) => {}
         Err(_) => {
             println!("{}: command not found", cmd.to_string_lossy())

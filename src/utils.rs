@@ -1,4 +1,11 @@
-use std::{env, ffi::CString, fs, path::PathBuf, rc::Rc};
+use std::{
+    collections::HashMap,
+    env::{self},
+    ffi::CString,
+    fs,
+    path::PathBuf,
+    rc::Rc,
+};
 
 use is_executable::IsExecutable;
 use nix::{
@@ -116,4 +123,14 @@ pub fn generate_cmd_cargs(command: &String, args: &[String]) -> (CString, Vec<CS
         .map(|a| CString::new(a.as_bytes()).unwrap())
         .collect();
     (cmd, cargs)
+}
+
+pub fn fetch_current_env() -> HashMap<String, String> {
+    env::vars().collect()
+}
+
+pub fn vars_map_to_list(vars: &HashMap<String, String>) -> Vec<CString> {
+    vars.into_iter()
+        .map(|(k, v)| CString::new(format!("{k}={v}")).unwrap())
+        .collect()
 }
