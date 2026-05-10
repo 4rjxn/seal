@@ -15,6 +15,7 @@ pub struct Pipeline {
 }
 
 pub enum Builtins {
+    Export,
     Echo,
     Lua,
     Exit,
@@ -47,8 +48,8 @@ impl ShellState {
         s.lua_engine = Some(Rc::new(LuaEngine::new(Rc::clone(&state))));
         Rc::clone(&state)
     }
-    pub fn set_env(&mut self, k: String, v: String) {
-        let _ = self.env_vars.insert(k, v);
+    pub fn set_env(&mut self, k: &str, v: &str) {
+        let _ = self.env_vars.insert(k.to_string(), v.to_string());
     }
     pub fn get_env(&self, k: &String) -> Option<String> {
         match self.env_vars.get(k) {

@@ -51,6 +51,7 @@ pub fn get_path_from_env(command: &String) -> ShellResult<PathBuf> {
 pub fn is_builtin(path: &str) -> Option<Builtins> {
     match path {
         "echo" => Some(Builtins::Echo),
+        "export" => Some(Builtins::Export),
         "exit" => Some(Builtins::Exit),
         "type" => Some(Builtins::Type),
         "exec" => Some(Builtins::Exec),

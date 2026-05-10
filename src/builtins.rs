@@ -55,6 +55,9 @@ pub fn run_builtin(
         Builtins::Exec => {
             exec_builtin(command, state)?;
         }
+        Builtins::Export => {
+            export_builtin(command, state);
+        }
     }
     Ok(())
 }
@@ -204,4 +207,18 @@ fn exec_builtin(command: &Command, state: ShellStateType) -> ShellResult<()> {
     };
     exec_command(cmd, cargs, vars);
     Ok(())
+}
+
+fn export_builtin(command: &Command, state: ShellStateType) {
+    println!("{:?}", command.args);
+    let mut s = state.borrow_mut();
+    if let Some(val) = command.args.get(1) {
+        if let Some((var, value)) = val.split_once("=") {
+            s.set_env(var, value);
+            return;
+        }
+    }
+    s.env_vars.iter().for_each(|(k, v)| {
+        println!("{}={}", k, v);
+    });
 }
