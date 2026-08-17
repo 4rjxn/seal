@@ -22,30 +22,13 @@ use nix::{
 };
 
 use crate::{
-    error::ShellResult,
     execution::spawn_pipeline,
-    models::{Command, Pipeline, ShellState},
+    models::{Pipeline, ShellState},
     parser::parse_tokens,
     repl::Repl,
     types::ShellStateType,
     utils::{ok_to_exit, set_terminal_leader},
 };
-
-fn process_command(
-    mut commands: Vec<Command>,
-    background: bool,
-    state: ShellStateType,
-) -> ShellResult<()> {
-    let _ = commands.iter_mut().try_for_each(|c| {
-        if !c.find_binary_from_path() {
-            return Err(crate::error::ShellError::CommandNotFound(c.program.clone()));
-        }
-        Ok(())
-    });
-
-    spawn_pipeline(&commands, background, state, false);
-    Ok(())
-}
 
 fn main() {
     set_signals_for_parent();
@@ -56,8 +39,14 @@ fn main() {
     let state = ShellState::new();
     let mut repl = Repl::new().expect("Failed to initialize REPL");
     loop {
-        if let Some(pipeline) = get_pipeline(&mut repl, Rc::clone(&state)) {
-            let _ = process_command(pipeline.commands, pipeline.background, Rc::clone(&state));
+        if let Some(mut pipeline) = get_pipeline(&mut repl, Rc::clone(&state)) {
+            pipeline.process_pipeline();
+            spawn_pipeline(
+                &pipeline.commands,
+                pipeline.background,
+                Rc::clone(&state),
+                false,
+            );
         }
     }
 }

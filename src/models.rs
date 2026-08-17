@@ -14,6 +14,14 @@ pub struct Pipeline {
     pub background: bool,
 }
 
+impl Pipeline {
+    pub fn process_pipeline(&mut self) {
+        let _ = self.commands.iter_mut().for_each(|c| {
+            c.find_binary_from_path();
+        });
+    }
+}
+
 pub enum Builtins {
     Export,
     Echo,
