@@ -88,6 +88,7 @@ pub enum LexerState {
     Normal,
     InSingleQuote,
     InDoubleQuote,
+    LuaString,
     Escaped { return_to: Box<LexerState> },
 }
 

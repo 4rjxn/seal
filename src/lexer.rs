@@ -45,10 +45,19 @@ impl<'a> Lexer<'a> {
             LexerState::InSingleQuote => self.step_in_single_quote(ch),
             LexerState::InDoubleQuote => self.step_in_double_quote(ch),
             LexerState::Normal => self.step_normal(ch),
+            LexerState::LuaString => self.step_lua_string(ch),
         }
+    }
+    fn step_lua_string(&mut self, ch: char) -> Option<Token> {
+        self.current_word.push(ch);
+        None
     }
     fn step_normal(&mut self, ch: char) -> Option<Token> {
         match ch {
+            ',' => {
+                self.state = LexerState::LuaString;
+                self.escape_for_lua()
+            }
             '\\' => {
                 self.state = LexerState::Escaped {
                     return_to: Box::new(LexerState::Normal),
@@ -101,6 +110,10 @@ impl<'a> Lexer<'a> {
                 None
             }
         }
+    }
+    fn escape_for_lua(&mut self) -> Option<Token> {
+        self.current_word = String::from("slua");
+        self.flush_current_word()
     }
 }
 
