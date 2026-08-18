@@ -1,6 +1,8 @@
 use std::env;
 use std::path::PathBuf;
 
+use rustyline::ColorMode;
+use rustyline::config::Configurer;
 use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 
 use crate::error::ShellResult;
@@ -19,6 +21,7 @@ impl Repl {
         let mut editor = Editor::<FileCompletion, DefaultHistory>::new()
             .map_err(|e| crate::error::ShellError::ReadlineError(e.to_string()))?;
         editor.set_helper(Some(FileCompletion {}));
+        editor.set_color_mode(ColorMode::Enabled);
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let history_path = PathBuf::from(home).join(".seal_history");
 
