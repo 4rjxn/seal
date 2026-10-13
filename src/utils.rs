@@ -55,7 +55,7 @@ pub fn is_builtin(path: &str) -> Option<Builtins> {
         "exit" => Some(Builtins::Exit),
         "type" => Some(Builtins::Type),
         "exec" => Some(Builtins::Exec),
-        "jobs" => Some(Builtins::Jobs),
+        "rn" => Some(Builtins::Jobs),
         "slua" => Some(Builtins::Lua),
         "pwd" => Some(Builtins::Pwd),
         "cd" => Some(Builtins::Cd),
