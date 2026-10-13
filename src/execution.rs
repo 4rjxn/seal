@@ -110,8 +110,15 @@ fn generate_job(
     if is_builtin(&command.program).is_some() {
         return None;
     }
+    // code to find job id based on latest job instead
+    //of looking at jobs length
+    let jobid = if let Some(job) = state.jobs.last() {
+        job.id + 1
+    } else {
+        0
+    };
     let job = Job {
-        id: state.jobs.len() + 1,
+        id: jobid,
         pgid: Pid::from_raw(pgid.unwrap().into()),
         status: JobStatus::Running,
         command: command.clone(),
