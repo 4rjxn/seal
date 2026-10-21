@@ -130,6 +130,7 @@ impl<'a> Lexer<'a> {
         }
         let token = word_to_token(&self.current_word, self.was_quoted);
         self.current_word.clear();
+        self.was_quoted = false;
         Some(token)
     }
     fn flush_word(&mut self, tokens: &mut Vec<Token>) {
@@ -181,6 +182,54 @@ mod tests {
                     value: "a".to_string(),
                     quoted: false
                 }
+            ]
+        )
+    }
+
+    #[test]
+    fn check_quoted_string() {
+        let input = "cat \"ar gon.clp\" > cat.txt";
+        let tokens = tokenize(input);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Word {
+                    value: String::from("cat"),
+                    quoted: false
+                },
+                Token::Word {
+                    value: String::from("ar gon.clp"),
+                    quoted: true
+                },
+                Token::Output,
+                Token::Word {
+                    value: String::from("cat.txt"),
+                    quoted: false
+                },
+            ]
+        )
+    }
+
+    #[test]
+    fn check_meta_charector_expansion() {
+        let input = "echo hell>hope.txt";
+        let tokens = tokenize(input);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Word {
+                    value: String::from("echo"),
+                    quoted: false
+                },
+                Token::Word {
+                    value: String::from("hell"),
+                    quoted: false
+                },
+                Token::Output,
+                Token::Word {
+                    value: String::from("hope.txt"),
+                    quoted: false
+                },
             ]
         )
     }
