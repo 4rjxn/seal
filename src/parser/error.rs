@@ -10,6 +10,9 @@ pub enum ParseError {
     #[error("expected a file name after redirection, found {0}")]
     ExpectedRedirectTarget(Found),
 
+    #[error("expected ')', found {0}")]
+    ExpectedRParen(Found),
+
     #[error("unexpected token {0}")]
     UnexpectedToken(Found),
 }
