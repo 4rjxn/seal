@@ -8,13 +8,13 @@ which both scalable and maintainable.
 
 # Checklist of Changes 
 
-- [] transition to a library based project.
-- [] update the lexer to use an iterator based approch.
-- [] improve the parser so that it returns an AST.
-- [] redesign the core execution path to a central api in lib.
-- [] build a builtins registary where builtins can be dynamically added.
-- [] after the registary implement builtin trait for luabuiltin 
-- [] finally you will have a plugin echo system.
+- [x] transition to a library based project.
+- [x] update the lexer to use an iterator based approch.
+- [x] improve the parser so that it returns an AST.
+- [ ] redesign the core execution path to a central api in lib.
+- [ ] build a builtins registary where builtins can be dynamically added.
+- [ ] after the registary implement builtin trait for luabuiltin 
+- [ ] finally you will have a plugin echo system.
 
 
 # The vision
