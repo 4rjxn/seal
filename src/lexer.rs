@@ -1,10 +1,16 @@
-mod error;
-mod tokens;
+pub mod error;
+pub mod tokens;
+
+use std::iter::FusedIterator;
 
 use crate::lexer::{
     error::LexerError::{self, UnterminatedDoubleQuote},
     tokens::{RedirMode, Token},
 };
+
+pub fn tokenise(str: &str) -> Result<Vec<Token>, LexerError> {
+    Lexer::new(str).collect()
+}
 
 struct Lexer<'a> {
     chars: &'a str,
@@ -18,13 +24,13 @@ impl<'a> Lexer<'a> {
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.peek() {
             if c.is_whitespace() {
-                self.next();
+                self.consume();
             } else {
                 break;
             }
         }
     }
-    fn next(&mut self) -> Option<char> {
+    fn consume(&mut self) -> Option<char> {
         let c = self.peek()?;
         self.pos += c.len_utf8();
         Some(c)
@@ -42,13 +48,9 @@ impl<'a> Lexer<'a> {
     }
 
     fn lex_redirection(&mut self, fd: Option<i32>) -> Token {
-        let kind = if self.next() == Some('>') {
+        let kind = if self.consume() == Some('>') {
             if self.eat('>') {
-                if self.eat('>') {
-                    RedirMode::AllAppend
-                } else {
-                    RedirMode::Append
-                }
+                RedirMode::Append
             } else {
                 RedirMode::Output
             }
@@ -75,17 +77,17 @@ impl<'a> Lexer<'a> {
             if is_word_end(c) {
                 break;
             }
-            self.next();
+            self.consume();
             match c {
                 '\'' => loop {
-                    match self.next() {
+                    match self.consume() {
                         Some('\'') => break,
                         Some(c) => word_buff.push(c),
                         None => return Err(LexerError::UnterminatedSingleQuote),
                     }
                 },
                 '"' => self.read_double_quoted(&mut word_buff)?,
-                '\\' => match self.next() {
+                '\\' => match self.consume() {
                     Some(c) => word_buff.push(c),
                     None => return Err(LexerError::TrailingBackslash),
                 },
@@ -96,10 +98,10 @@ impl<'a> Lexer<'a> {
     }
     fn read_double_quoted(&mut self, word_buff: &mut String) -> Result<(), LexerError> {
         loop {
-            match self.next() {
+            match self.consume() {
                 None => return Err(UnterminatedDoubleQuote),
                 Some('"') => return Ok(()),
-                Some('\\') => match self.next() {
+                Some('\\') => match self.consume() {
                     Some(c @ ('"' | '$' | '\\')) => word_buff.push(c),
                     Some('\n') => {}
                     Some(c) => {
@@ -119,7 +121,7 @@ impl<'a> Lexer<'a> {
 
         let tok = match c {
             '|' => {
-                self.next();
+                self.consume();
                 if self.eat('|') {
                     Token::OrIf
                 } else {
@@ -127,28 +129,30 @@ impl<'a> Lexer<'a> {
                 }
             }
             '&' => {
-                self.next();
+                self.consume();
                 if self.eat('&') {
                     Token::AndIf
                 } else if self.eat('>') {
-                    Token::Redir {
-                        fd: None,
-                        kind: RedirMode::All,
-                    }
+                    let kind = if self.eat('>') {
+                        RedirMode::AllAppend
+                    } else {
+                        RedirMode::All
+                    };
+                    Token::Redir { fd: None, kind }
                 } else {
                     Token::Bg
                 }
             }
             ';' => {
-                self.next();
+                self.consume();
                 Token::Semi
             }
             ')' => {
-                self.next();
+                self.consume();
                 Token::RParen
             }
             '(' => {
-                self.next();
+                self.consume();
                 Token::LParen
             }
             '>' | '<' => self.lex_redirection(None),
@@ -177,6 +181,8 @@ impl<'a> Iterator for Lexer<'a> {
         }
     }
 }
+
+impl<'a> FusedIterator for Lexer<'a> {}
 
 #[cfg(test)]
 
@@ -209,7 +215,7 @@ mod lexer_tester {
         let output: Result<Vec<Token>, LexerError> = lexer.collect();
         let tokens = match output {
             Ok(t) => t,
-            Err(e) => panic!("{}", e),
+            Err(e) => panic!("Token generation failed: {}", e),
         };
         assert_eq!(
             vec![
@@ -223,5 +229,68 @@ mod lexer_tester {
             ],
             tokens
         );
+    }
+
+    #[test]
+    fn test_redirection_err() {
+        let command = String::from("echo helloo 2>>h.txt");
+        let lexer = Lexer::new(&command);
+        let output: Result<Vec<Token>, LexerError> = lexer.collect();
+        let tokens = match output {
+            Ok(t) => t,
+            Err(e) => panic!("Token generation failed: {}", e),
+        };
+        assert_eq!(
+            vec![
+                Token::Word(String::from("echo")),
+                Token::Word(String::from("helloo")),
+                Token::Redir {
+                    fd: Some(2),
+                    kind: RedirMode::Append
+                },
+                Token::Word(String::from("h.txt"))
+            ],
+            tokens
+        );
+    }
+    #[test]
+    fn test_logical_and_or() {
+        let lexer = Lexer::new("cat a && cat b || echo fail &");
+        let tokens: Vec<Token> = lexer.collect::<Result<_, _>>().unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Word("cat".into()),
+                Token::Word("a".into()),
+                Token::AndIf,
+                Token::Word("cat".into()),
+                Token::Word("b".into()),
+                Token::OrIf,
+                Token::Word("echo".into()),
+                Token::Word("fail".into()),
+                Token::Bg,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_embedded_quotes() {
+        let lexer = Lexer::new(r#"echo "hello | world" 'foo && bar'"#);
+        let tokens: Vec<Token> = lexer.collect::<Result<_, _>>().unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Word("echo".into()),
+                Token::Word("hello | world".into()),
+                Token::Word("foo && bar".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unclosed_quote_error() {
+        let mut lexer = Lexer::new(r#"echo "unclosed"#);
+        assert!(matches!(lexer.next(), Some(Ok(Token::Word(_)))));
+        assert_eq!(lexer.next(), Some(Err(LexerError::UnterminatedDoubleQuote)));
     }
 }
