@@ -1,178 +1,75 @@
-use std::rc::Rc;
-
-use crate::{
-    models::{Command, Pipeline, Redirect, RedirectKind, Token},
-    traits::Expantions,
-    types::ShellStateType,
+use std::{
+    iter::Peekable,
+    vec::{self, IntoIter},
 };
 
-pub fn parse_tokens(tokens: Vec<Token>, state: ShellStateType) -> Pipeline {
-    let mut parser = Parser::new(tokens, state);
-    parser.parse()
-}
+use crate::{
+    lexer::tokens::{RedirMode, Token},
+    parser::{
+        error::{Found, ParseError::ExpectedRedirectTarget, ParseResult},
+        node::{Redirect, RedirectKind, UnitCommand},
+    },
+};
 
-// The parser struct which holds parsing state;
+mod error;
+mod node;
+
 struct Parser {
-    stream: TokenStream,
-    is_background: bool,
-    state: ShellStateType,
+    stream: Vec<Token>,
 }
 
 impl Parser {
-    pub fn new(input: Vec<Token>, state: ShellStateType) -> Self {
-        let stream = TokenStream::new(input);
-        Self {
-            stream,
-            is_background: false,
-            state,
-        }
+    fn new(mut stream: Vec<Token>) -> Self {
+        stream.reverse();
+        Self { stream: stream }
     }
-
-    pub fn parse(&mut self) -> Pipeline {
-        let commands = self.parse_pipeline();
-        Pipeline {
-            commands,
-            background: self.is_background,
-        }
-    }
-}
-
-struct TokenStream {
-    tokens: Vec<Token>,
-    pos: usize,
-}
-
-impl TokenStream {
-    fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
+    fn bump(&mut self) -> Option<Token> {
+        self.stream.pop()
     }
     fn peek(&self) -> Option<&Token> {
-        self.tokens.get(self.pos)
+        self.stream.last()
     }
-    fn next(&mut self) -> Option<&Token> {
-        let token = self.tokens.get(self.pos)?;
-        self.pos += 1;
-        Some(token)
-    }
-
-    fn expect_word(&mut self) -> Option<String> {
-        match self.peek() {
-            Some(Token::Word { value, .. }) => {
-                let word = value.clone();
-                self.pos += 1;
-                Some(word)
-            }
-            _ => None,
-        }
-    }
-
-    fn _is_done(&self) -> bool {
-        self.pos >= self.tokens.len()
-    }
-}
-impl Parser {
-    fn parse_pipeline(&mut self) -> Vec<Command> {
-        let mut commands = Vec::new();
+    fn parse_list() {}
+    fn parse_and_or() {}
+    fn parse_pipeline() {}
+    fn parse_command() {}
+    fn parse_unit_command(&mut self) -> ParseResult<UnitCommand> {
+        let mut cmd = UnitCommand::default();
         loop {
-            if let Some(cmd) = self.parse_command() {
-                commands.push(cmd);
-            }
-
-            match self.stream.peek() {
-                Some(Token::Pipe) => self.stream.next(),
+            match self.peek() {
+                Some(Token::Word(_)) | Some(Token::Redir { .. }) => {}
                 _ => break,
-            };
-        }
-        commands
-    }
-
-    fn parse_command(&mut self) -> Option<Command> {
-        let (program, first_arg) = self.parse_program()?;
-        let (args, redirects) = self.parse_args_and_redirects(first_arg);
-        Some(Command {
-            program,
-            args,
-            redirects,
-        })
-    }
-
-    fn parse_args_and_redirects(&mut self, first_arg: String) -> (Vec<String>, Vec<Redirect>) {
-        let mut args = vec![first_arg];
-        let mut redirects = Vec::new();
-
-        while let Some(token) = self.stream.peek() {
-            match token {
-                Token::Word { .. } => self.parse_arg(&mut args),
-                Token::Output | Token::OutputErr | Token::Append | Token::AppendErr => {
-                    self.parse_redirect(&mut redirects)
+            }
+            match self.bump() {
+                Some(Token::Word(w)) => {
+                    cmd.words.push(w);
                 }
-                Token::Pipe | Token::Background => break,
+                Some(Token::Redir { fd, kind }) => match self.bump() {
+                    Some(Token::Word(t)) => {
+                        cmd.redirects.push(Redirect {
+                            fd,
+                            kind: RedirectKind::from(kind),
+                            target: node::RedirectTarget::File(t),
+                        });
+                    }
+                    Some(any) => return Err(ExpectedRedirectTarget(Found::Symbol(any))),
+                    None => return Err(ExpectedRedirectTarget(Found::Eof)),
+                },
+                _ => unreachable!(),
             }
         }
-        (args, redirects)
-    }
-
-    fn parse_arg(&mut self, args: &mut Vec<String>) {
-        if let Some(Token::Word { value, quoted }) = self.stream.next() {
-            if *quoted {
-                args.push(value.clone());
-            } else {
-                let expanded = value
-                    .expand_path()
-                    .expand_env(Rc::clone(&self.state))
-                    .expand_glob();
-                args.extend(expanded);
-            }
-        }
-    }
-
-    fn parse_redirect(&mut self, redirects: &mut Vec<Redirect>) {
-        let kind = match self.stream.next() {
-            Some(Token::Output) => RedirectKind::Output,
-            Some(Token::OutputErr) => RedirectKind::OutputErr,
-            Some(Token::Append) => RedirectKind::Append,
-            Some(Token::AppendErr) => RedirectKind::AppendErr,
-            _ => return,
-        };
-        if let Some(target) = self.stream.expect_word() {
-            redirects.push(Redirect { kind, target });
-        } else {
-            eprintln!("syntax error: expected filename after redirect");
-        }
-    }
-
-    fn parse_program(&mut self) -> Option<(String, String)> {
-        let word = self.stream.expect_word()?;
-        let path = word.clone();
-        Some((path, word))
+        Ok(cmd)
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::{models::Token, parser::parse_tokens};
-
-    #[test]
-    fn basic_pipeline() {
-        let tokens = vec![
-            Token::Word {
-                value: "ls".to_string(),
-                quoted: false,
-            },
-            Token::Word {
-                value: "-lah".to_string(),
-                quoted: false,
-            },
-            Token::Pipe,
-            Token::Word {
-                value: "less".to_string(),
-                quoted: false,
-            },
-        ];
-        let pipeline = parse_tokens(tokens);
-        assert_eq!(pipeline.commands.len(), 2);
-        assert!(pipeline.commands[0].program.ends_with("ls"));
-        assert!(pipeline.commands[1].program.ends_with("less"));
-        assert_eq!(pipeline.commands[0].args, vec!["ls", "-lah"]);
+impl From<RedirMode> for RedirectKind {
+    fn from(value: RedirMode) -> Self {
+        match value {
+            RedirMode::All => RedirectKind::All,
+            RedirMode::Output => RedirectKind::Output,
+            RedirMode::Append => RedirectKind::Append,
+            RedirMode::AllAppend => RedirectKind::AllAppend,
+            RedirMode::Input => RedirectKind::Input,
+        }
     }
 }
