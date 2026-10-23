@@ -26,11 +26,13 @@ pub struct UnitCommand {
     pub redirects: Vec<Redirect>,
 }
 
-enum Command {
+#[derive(Debug, PartialEq)]
+pub enum Command {
     Unit(UnitCommand),
     Subshell(Box<SyntaxNode>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum SyntaxNode {
     And {
         left: Box<SyntaxNode>,
