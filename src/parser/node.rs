@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq)]
 pub enum RedirectKind {
     All,
     Output,
@@ -6,18 +7,20 @@ pub enum RedirectKind {
     Input,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum RedirectTarget {
     Fd(i32),
     File(String),
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Redirect {
     pub fd: Option<i32>,
     pub kind: RedirectKind,
     pub target: RedirectTarget,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, PartialEq)]
 pub struct UnitCommand {
     pub words: Vec<String>,
     pub redirects: Vec<Redirect>,
