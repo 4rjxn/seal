@@ -13,8 +13,8 @@ use crate::{
     },
 };
 
-mod error;
-mod node;
+pub mod error;
+pub mod node;
 
 struct Parser {
     stream: Vec<Token>,
