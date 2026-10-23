@@ -1,8 +1,3 @@
-use std::{
-    iter::Peekable,
-    vec::{self, IntoIter},
-};
-
 use crate::{
     lexer::tokens::{RedirMode, Token},
     parser::{
@@ -71,5 +66,69 @@ impl From<RedirMode> for RedirectKind {
             RedirMode::AllAppend => RedirectKind::AllAppend,
             RedirMode::Input => RedirectKind::Input,
         }
+    }
+}
+
+#[cfg(test)]
+mod parser_tester {
+    use crate::parser::node::RedirectTarget;
+
+    use super::*;
+
+    #[test]
+    fn test_single_word_command() {
+        let tokens = vec![Token::Word("cat".into())];
+        let unit_command = Parser::new(tokens).parse_unit_command().unwrap();
+        assert_eq!(unit_command.words, vec!["cat"]);
+        assert!(unit_command.redirects.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_words() {
+        let tokens = vec![Token::Word("cat".into()), Token::Word("hello.txt".into())];
+        let unit_command = Parser::new(tokens).parse_unit_command().unwrap();
+        assert_eq!(unit_command.words, vec!["cat", "hello.txt"]);
+        assert!(unit_command.redirects.is_empty());
+    }
+
+    #[test]
+    fn test_command_with_redirection_producing_error() {
+        let tokens = vec![
+            Token::Word("cat".into()),
+            Token::Word("hello.txt".into()),
+            Token::Redir {
+                fd: None,
+                kind: RedirMode::Output,
+            },
+        ];
+        let unit_command = Parser::new(tokens).parse_unit_command();
+        assert!(
+            matches!(unit_command, Err(ExpectedRedirectTarget(_))),
+            "expected redirect target error but got {:?}",
+            unit_command
+        );
+    }
+
+    #[test]
+    fn test_command_with_redirection() {
+        let tokens = vec![
+            Token::Word("cat".into()),
+            Token::Word("hello.txt".into()),
+            Token::Redir {
+                fd: None,
+                kind: RedirMode::Output,
+            },
+            Token::Word("h".into()),
+        ];
+        let unit_command = Parser::new(tokens).parse_unit_command().unwrap();
+        assert_eq!(unit_command.words, vec!["cat", "hello.txt"]);
+        assert_eq!(
+            unit_command.redirects,
+            vec![Redirect {
+                fd: None,
+                kind: RedirectKind::Output,
+                target: RedirectTarget::File("h".into())
+            }]
+        );
     }
 }
