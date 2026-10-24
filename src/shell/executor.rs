@@ -86,9 +86,27 @@ fn execute_pipeline(shell: &mut Shell, cmds: Vec<Command>, is_background: bool) 
     }
 }
 
-fn child_exec(shell: &mut Shell, cmd: Command) {}
+fn child_exec(shell: &mut Shell, cmd: &Command) {
+    match cmd {
+        Command::Unit(unit_command) => {
+            if let Err(e) = apply_redirects(&unit_command.redirects) {
+                eprintln!("seal: {e}");
+                exit(1)
+            }
+            if unit_command.words.is_empty() {
+                exit(0)
+            }
+            exec_external(shell, unit_command);
+        }
 
-fn apply_redirects(redirects: Vec<Redirect>) -> io::Result<()> {
+        Command::Subshell(syntax_node) => {
+            let code = execute(shell, syntax_node);
+            exit(code)
+        }
+    }
+}
+
+fn apply_redirects(redirects: &Vec<Redirect>) -> io::Result<()> {
     todo!()
 }
 
