@@ -1,4 +1,4 @@
-use nix::unistd::Pid;
+use nix::unistd::{Pid, getpgrp};
 
 use crate::{
     lexer,
@@ -24,7 +24,7 @@ impl Shell {
             env: Env::new(),
             jobs: JobTable::new(),
             last_exit: 0,
-            shell_pgid: Pid::this(),
+            shell_pgid: getpgrp(),
         }
     }
 

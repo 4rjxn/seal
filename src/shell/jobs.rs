@@ -1,5 +1,4 @@
 use nix::{
-    libc::pgn_t,
     sys::wait::{WaitPidFlag, WaitStatus, waitpid},
     unistd::Pid,
 };
@@ -41,7 +40,7 @@ impl JobTable {
     fn find_by_pgid_mut(&mut self, pgid: Pid) -> Option<&mut Job> {
         self.jobs.iter_mut().find(|s| s.pgid == pgid)
     }
-    fn update_done(&mut self) {
+    pub fn update_done(&mut self) {
         while let Ok(status) = waitpid(Pid::from_raw(-1), Some(WaitPidFlag::WNOHANG)) {
             match status {
                 WaitStatus::Exited(pid, _) | WaitStatus::Signaled(pid, _, _) => {
