@@ -16,7 +16,7 @@ impl Env {
             cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
         }
     }
-    fn get(&self, key: &str) -> Option<&str> {
+    pub fn get(&self, key: &str) -> Option<&str> {
         self.vars.get(key).map(|s| s.as_str())
     }
     fn set(&mut self, key: String, val: String) {
@@ -26,10 +26,10 @@ impl Env {
         self.vars.remove(key);
     }
 
-    fn as_execve_list(&self) -> Vec<CString> {
+    pub fn as_execve_list(&self) -> Vec<CString> {
         self.vars
             .iter()
-            .map(|(k, s)| CString::new(format!("{}={}", k, s)).unwrap())
+            .map(|(k, s)| CString::new(format!("{}={}", k, s)).unwrap_or_default())
             .collect()
     }
     fn cwd(&self) -> &Path {
