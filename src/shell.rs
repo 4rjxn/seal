@@ -3,9 +3,10 @@ use nix::unistd::{Pid, getpgrp};
 use crate::{
     lexer,
     parser::{self, node::SyntaxNode},
-    shell::{env::Env, jobs::JobTable},
+    shell::{builtins::BuiltinRegistry, env::Env, jobs::JobTable},
 };
 
+mod builtins;
 pub mod env;
 pub mod executor;
 pub mod jobs;
@@ -16,6 +17,7 @@ pub struct Shell {
     pub jobs: JobTable,
     pub last_exit: i32,
     pub shell_pgid: Pid,
+    pub builtins: BuiltinRegistry,
 }
 
 impl Shell {
@@ -25,6 +27,7 @@ impl Shell {
             jobs: JobTable::new(),
             last_exit: 0,
             shell_pgid: getpgrp(),
+            builtins: BuiltinRegistry::with_default(),
         }
     }
 
