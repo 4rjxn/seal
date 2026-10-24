@@ -37,7 +37,7 @@ impl JobTable {
     pub fn find_by_pgid(&self, pgid: Pid) -> Option<&Job> {
         self.jobs.iter().find(|&s| s.pgid == pgid)
     }
-    fn find_by_pgid_mut(&mut self, pgid: Pid) -> Option<&mut Job> {
+    fn _find_by_pgid_mut(&mut self, pgid: Pid) -> Option<&mut Job> {
         self.jobs.iter_mut().find(|s| s.pgid == pgid)
     }
     pub fn update_done(&mut self) {
