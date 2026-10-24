@@ -55,3 +55,9 @@ impl Shell {
         self.execute(&syntax)
     }
 }
+
+impl Default for Shell {
+    fn default() -> Self {
+        Self::new()
+    }
+}

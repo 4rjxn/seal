@@ -27,7 +27,7 @@ pub fn parse(stream: Vec<Token>) -> ParseResult<SyntaxNode> {
 impl Parser {
     fn new(mut stream: Vec<Token>) -> Self {
         stream.reverse();
-        Self { stream: stream }
+        Self { stream }
     }
     fn bump(&mut self) -> Option<Token> {
         self.stream.pop()
@@ -111,11 +111,7 @@ impl Parser {
     }
     fn parse_unit_command(&mut self) -> ParseResult<UnitCommand> {
         let mut cmd = UnitCommand::default();
-        loop {
-            match self.peek() {
-                Some(Token::Word(_)) | Some(Token::Redir { .. }) => {}
-                _ => break,
-            }
+        while let Some(Token::Word(_)) | Some(Token::Redir { .. }) = self.peek() {
             match self.bump() {
                 Some(Token::Word(w)) => {
                     cmd.words.push(w);

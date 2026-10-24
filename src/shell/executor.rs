@@ -49,14 +49,14 @@ pub fn execute(shell: &mut Shell, syntax: &SyntaxNode) -> i32 {
 fn execute_and_or(shell: &mut Shell, left: &SyntaxNode, right: &SyntaxNode, is_and: bool) -> i32 {
     let mut last_exit_code;
     if is_and {
-        last_exit_code = execute(shell, &left);
+        last_exit_code = execute(shell, left);
         if last_exit_code == 0 {
-            last_exit_code = execute(shell, &right);
+            last_exit_code = execute(shell, right);
         }
     } else {
-        last_exit_code = execute(shell, &left);
+        last_exit_code = execute(shell, left);
         if last_exit_code != 0 {
-            last_exit_code = execute(shell, &right);
+            last_exit_code = execute(shell, right);
         }
     }
     last_exit_code
@@ -92,12 +92,12 @@ fn execute_background(shell: &mut Shell, syntax: &SyntaxNode) -> i32 {
                         shell.jobs.find_by_pgid(child).map(|j| j.id).unwrap_or(1),
                         child
                     );
-                    return 0;
+                    0 //return successes
                 }
             },
             Err(e) => {
                 eprintln!("seal: fork failid {e}");
-                return 1;
+                1 //return faliure
             }
         },
     }
@@ -109,7 +109,7 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
         match cmd {
             Command::Unit(unit_command) => {
                 if is_builtin(shell, unit_command) {
-                    return run_builtin_with_redirects(shell, &unit_command);
+                    return run_builtin_with_redirects(shell, unit_command);
                 }
             }
             Command::Subshell(_) => {}
@@ -134,13 +134,8 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
                 return 1;
             }
         };
-        let child = match spawn_child(
-            shell,
-            &command,
-            pgid,
-            prev_read.as_ref(),
-            write_end.as_ref(),
-        ) {
+        let child = match spawn_child(shell, command, pgid, prev_read.as_ref(), write_end.as_ref())
+        {
             Ok(child) => child,
             Err(e) => {
                 eprintln!("seal: fork failed: {e}");
@@ -168,7 +163,7 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
     if let Some(job_pgid) = pgid {
         wait_pipeline(shell, job_pgid, children, is_background)
     } else {
-        return 0;
+        0 //return successes
     }
 }
 

@@ -40,7 +40,7 @@ impl Repl {
                     }
                     let _ = self.editor.add_history_entry(line.as_str());
                     let _ = self.editor.save_history(&self.history_path);
-                    return Some(String::from(line));
+                    return Some(line);
                 }
                 Err(ReadlineError::Interrupted) => {
                     continue;

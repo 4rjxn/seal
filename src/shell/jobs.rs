@@ -69,3 +69,9 @@ impl JobTable {
         id
     }
 }
+
+impl Default for JobTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
