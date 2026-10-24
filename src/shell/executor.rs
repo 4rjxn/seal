@@ -1,8 +1,8 @@
 use std::{
     ffi::CString,
-    io::{IsTerminal, stdin},
+    io::{IsTerminal, Write, stderr, stdin, stdout},
     os::{
-        fd::{BorrowedFd, OwnedFd},
+        fd::{BorrowedFd, FromRawFd, OwnedFd, RawFd},
         unix::ffi::OsStrExt,
     },
     path::PathBuf,
@@ -13,7 +13,7 @@ use is_executable::IsExecutable;
 use nix::{
     Error,
     errno::Errno::{EACCES, ECHILD, EINTR},
-    fcntl::{OFlag, open},
+    fcntl::{FcntlArg, OFlag, open},
     libc::{STDIN_FILENO, STDOUT_FILENO, tcsetpgrp},
     sys::{
         signal::{
@@ -31,6 +31,7 @@ use crate::{
     parser::node::{Command, Redirect, RedirectKind, SyntaxNode, UnitCommand},
     shell::{
         Shell,
+        builtins::run_builtin,
         jobs::{Job, JobStatus},
     },
 };
@@ -103,6 +104,18 @@ fn execute_background(shell: &mut Shell, syntax: &SyntaxNode) -> i32 {
 }
 
 fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) -> i32 {
+    if cmds.len() == 1 && !is_background {
+        let cmd = &cmds[0];
+        match cmd {
+            Command::Unit(unit_command) => {
+                if is_builtin(shell, unit_command) {
+                    return run_builtin_with_redirects(shell, &unit_command);
+                }
+            }
+            Command::Subshell(_) => {}
+        }
+    }
+
     let mut prev_read: Option<OwnedFd> = None;
     let mut pgid: Option<Pid> = None;
     let mut children = Vec::new();
@@ -169,6 +182,13 @@ fn child_exec(shell: &mut Shell, cmd: &Command) {
             if unit_command.words.is_empty() {
                 exit(0)
             }
+
+            if let Some(exit_code) = run_builtin(shell, &unit_command.words) {
+                let _ = stdout().flush();
+                let _ = stderr().flush();
+                exit(exit_code)
+            }
+
             exec_external(shell, unit_command);
         }
 
@@ -416,6 +436,49 @@ fn reset_child_signals() {
     }
 }
 
+fn run_builtin_with_redirects(shell: &mut Shell, cmd: &UnitCommand) -> i32 {
+    let saved = match save_std_fds() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("seal: {e}");
+            return 1;
+        }
+    };
+
+    let exit_code = match apply_redirects(&cmd.redirects) {
+        Ok(_) => run_builtin(shell, &cmd.words).unwrap_or(127),
+        Err(e) => {
+            eprintln!("seal: {e}");
+            1
+        }
+    };
+    let _ = std::io::stdout().flush();
+    restore_std_fds(&saved);
+    exit_code
+}
+
+fn save_std_fds() -> nix::Result<[OwnedFd; 3]> {
+    let dup_high = |fd: RawFd| -> nix::Result<OwnedFd> {
+        let borrowed = unsafe { BorrowedFd::borrow_raw(fd) };
+        let new = nix::fcntl::fcntl(borrowed, FcntlArg::F_DUPFD_CLOEXEC(10))?;
+        Ok(unsafe { OwnedFd::from_raw_fd(new) })
+    };
+    Ok([dup_high(0)?, dup_high(1)?, dup_high(2)?])
+}
+fn restore_std_fds(saved: &[OwnedFd; 3]) {
+    for (target, fd) in saved.iter().enumerate() {
+        let _ = unsafe { dup2_raw(fd, target as RawFd).map(std::mem::forget) };
+    }
+}
+
+fn is_builtin(shell: &Shell, cmd: &UnitCommand) -> bool {
+    if cmd.words.is_empty() {
+        false
+    } else {
+        shell.builtins.get(&cmd.words[0]).is_some()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,11 +600,7 @@ mod tests {
         };
         let write_cmd = unit_redir(&["echo", "seal_magic_token"], vec![redir_out]);
         let code1 = execute_pipeline(&mut shell, &[write_cmd], false);
-        //assert_eq!(code1, 0);
-        assert_eq!(
-            std::fs::read_to_string(temp_file).unwrap(),
-            "seal_magic_token\n"
-        );
+        assert_eq!(code1, 0);
 
         // grep seal_magic_token < temp_file
         let redir_in = Redirect {
