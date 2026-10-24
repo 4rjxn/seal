@@ -5,22 +5,17 @@ use rustyline::ColorMode;
 use rustyline::config::Configurer;
 use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 
-use crate::error::ShellResult;
-use crate::file_completion::FileCompletion;
-use crate::lexer::tokenize;
-use crate::models::Token;
 use crate::prompt::set_prompt;
 
 pub struct Repl {
-    editor: Editor<FileCompletion, DefaultHistory>,
+    editor: Editor<(), DefaultHistory>,
     history_path: PathBuf,
 }
 
 impl Repl {
-    pub fn new() -> ShellResult<Self> {
-        let mut editor = Editor::<FileCompletion, DefaultHistory>::new()
-            .map_err(|e| crate::error::ShellError::ReadlineError(e.to_string()))?;
-        editor.set_helper(Some(FileCompletion {}));
+    pub fn new() -> Self {
+        let mut editor = Editor::<(), DefaultHistory>::new().unwrap();
+        //editor.set_helper(Some({}));
         editor.set_color_mode(ColorMode::Enabled);
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let history_path = PathBuf::from(home).join(".seal_history");
@@ -29,13 +24,13 @@ impl Repl {
             let _ = editor.load_history(&history_path);
         }
 
-        Ok(Self {
+        Self {
             editor,
             history_path,
-        })
+        }
     }
 
-    pub fn read_and_parse(&mut self) -> Option<Vec<Token>> {
+    pub fn read(&mut self) -> Option<String> {
         loop {
             let readline = self.editor.readline(set_prompt().as_str());
             match readline {
@@ -45,7 +40,7 @@ impl Repl {
                     }
                     let _ = self.editor.add_history_entry(line.as_str());
                     let _ = self.editor.save_history(&self.history_path);
-                    return Some(tokenize(&line));
+                    return Some(String::from(line));
                 }
                 Err(ReadlineError::Interrupted) => {
                     continue;
