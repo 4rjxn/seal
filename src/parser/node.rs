@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RedirectKind {
     All,
     Output,
@@ -7,32 +7,32 @@ pub enum RedirectKind {
     Input,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RedirectTarget {
     Fd(i32),
     File(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Redirect {
     pub fd: Option<i32>,
     pub kind: RedirectKind,
     pub target: RedirectTarget,
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct UnitCommand {
     pub words: Vec<String>,
     pub redirects: Vec<Redirect>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     Unit(UnitCommand),
     Subshell(Box<SyntaxNode>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SyntaxNode {
     And {
         left: Box<SyntaxNode>,
