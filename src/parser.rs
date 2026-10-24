@@ -159,7 +159,7 @@ impl From<RedirMode> for RedirectKind {
 
 #[cfg(test)]
 mod parser_tester {
-    use std::{error::Error, result, vec};
+    use std::vec;
 
     use crate::parser::{
         error::ParseError::{ExpectedRParen, ExpectedRedirectTarget},
