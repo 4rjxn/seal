@@ -113,3 +113,42 @@ fn apply_redirects(redirects: &Vec<Redirect>) -> io::Result<()> {
 fn wait_pipeline(shell: &mut Shell, pgid: Pid, children: Vec<Pid>, is_background: bool) -> i32 {
     todo!()
 }
+
+fn make_pipe_if_needed(has_next: bool) -> Result<(Option<OwnedFd>, Option<OwnedFd>), Error> {
+    if !has_next {
+        return Ok((None, None));
+    }
+    pipe2(OFlag::O_CLOEXEC).map(|(r, w)| (Some(r), Some(w)))
+}
+
+fn spawn_child(
+    shell: &mut Shell,
+    cmd: &Command,
+    pgid: Option<Pid>,
+    prev_read: Option<&OwnedFd>,
+    write_end: Option<&OwnedFd>,
+) -> nix::Result<Pid> {
+    match unsafe { fork()? } {
+        nix::unistd::ForkResult::Child => {
+            reset_child_signals();
+
+            let target_pgid = pgid.unwrap_or(Pid::from_raw(0));
+            let _ = setpgid(Pid::from_raw(0), target_pgid);
+
+            if let Some(r) = prev_read {
+                let _ = dup2_stdin(r);
+            }
+            if let Some(w) = write_end {
+                let _ = dup2_stdout(w);
+            }
+
+            child_exec(shell, cmd);
+            exit(1); //exit if child fails to replace image.
+        }
+        nix::unistd::ForkResult::Parent { child } => Ok(child),
+    }
+}
+
+fn exec_external(shell: &mut Shell, cmd: &UnitCommand) {}
+
+fn reset_child_signals() {}
