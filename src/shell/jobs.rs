@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use nix::{
     sys::{
-        signal::Signal::{self, SIGTSTP},
+        signal::Signal::{self, SIGINT, SIGTSTP},
         wait::WaitStatus,
     },
     unistd::Pid,
@@ -55,7 +55,9 @@ impl Job {
         }
     }
     pub fn was_interrupted(&self) -> bool {
-        todo!()
+        self.proc
+            .iter()
+            .any(|p| p.state == ProcState::Signaled(SIGINT))
     }
 }
 
