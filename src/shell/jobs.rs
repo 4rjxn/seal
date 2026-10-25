@@ -10,6 +10,7 @@ pub struct JobTable {
     jobs: Vec<Job>,
 }
 
+#[derive(PartialEq)]
 enum ProcState {
     Running,
     Stopped,
@@ -17,7 +18,7 @@ enum ProcState {
     Signaled(Signal),
 }
 
-struct Process {
+pub struct Process {
     pid: Pid,
     state: ProcState,
 }
@@ -25,7 +26,6 @@ struct Process {
 pub struct Job {
     pub id: usize,
     pub pgid: Pid,
-    pub status: JobState,
     pub command: String,
     pub proc: Vec<Process>,
     pub background: bool,
@@ -34,7 +34,13 @@ pub struct Job {
 
 impl Job {
     pub fn state(&self) -> JobState {
-        todo!()
+        if self.proc.iter().any(|p| p.state == ProcState::Running) {
+            JobState::Running
+        } else if self.proc.iter().any(|p| p.state == ProcState::Stopped) {
+            JobState::Stopped
+        } else {
+            JobState::Done
+        }
     }
 
     pub fn exit_code(&self) -> i32 {
