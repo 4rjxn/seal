@@ -94,7 +94,23 @@ impl JobTable {
         Self::default()
     }
     pub fn add(&mut self, pgid: Pid, command: String, childern: &[Pid], background: bool) -> usize {
-        todo!()
+        let id = self.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
+        let procs = childern
+            .iter()
+            .map(|&pid| Process {
+                pid,
+                state: ProcState::Running,
+            })
+            .collect();
+        self.jobs.push(Job {
+            id,
+            pgid,
+            command,
+            proc: procs,
+            background,
+            notified: false,
+        });
+        id
     }
     pub fn get(&self, id: usize) -> Option<&Job> {
         todo!()
