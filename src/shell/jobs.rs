@@ -8,8 +8,6 @@ use nix::{
     unistd::Pid,
 };
 
-use crate::shell::jobs;
-
 #[derive(Default)]
 pub struct JobTable {
     jobs: Vec<Job>,
@@ -177,11 +175,14 @@ impl JobTable {
         let mut events = Vec::new();
         for job in &mut self.jobs {
             match job.state() {
-                JobState::Stopped => events.push(JobEvent::Stopped {
-                    id: job.id,
-                    command: job.command.clone(),
-                }),
-                JobState::Done => events.push(JobEvent::Done {
+                JobState::Stopped if !job.notified => {
+                    job.notified = true;
+                    events.push(JobEvent::Stopped {
+                        id: job.id,
+                        command: job.command.clone(),
+                    })
+                }
+                JobState::Done if job.background => events.push(JobEvent::Done {
                     id: job.id,
                     command: job.command.clone(),
                     exit_code: job.exit_code(),
