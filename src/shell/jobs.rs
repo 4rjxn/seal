@@ -168,7 +168,11 @@ impl JobTable {
             job.background = background;
         }
     }
-    pub fn mark_notified(&mut self, id: usize) {}
+    pub fn mark_notified(&mut self, id: usize) {
+        if let Some(job) = self.jobs.get_mut(id) {
+            job.notified = true
+        }
+    }
     pub fn take_events(&mut self) -> Vec<JobEvent> {
         let mut events = Vec::new();
         for job in &mut self.jobs {
