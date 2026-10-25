@@ -162,12 +162,12 @@ impl JobTable {
     }
 
     pub fn set_background(&mut self, id: usize, background: bool) {
-        if let Some(job) = self.jobs.get_mut(id) {
+        if let Some(job) = self.get_mut(id) {
             job.background = background;
         }
     }
     pub fn mark_notified(&mut self, id: usize) {
-        if let Some(job) = self.jobs.get_mut(id) {
+        if let Some(job) = self.get_mut(id) {
             job.notified = true
         }
     }
