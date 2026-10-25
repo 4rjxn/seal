@@ -112,6 +112,10 @@ impl JobTable {
         });
         id
     }
+    pub fn current_job(&self) -> Option<&Job> {
+        let id = self.jobs.iter().map(|j| j.id).max()?;
+        self.get(id)
+    }
     pub fn get(&self, id: usize) -> Option<&Job> {
         self.jobs.iter().find(|j| j.id == id)
     }
