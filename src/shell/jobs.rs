@@ -1,7 +1,10 @@
 use std::fmt::Display;
 
 use nix::{
-    sys::{signal::Signal, wait::WaitStatus},
+    sys::{
+        signal::Signal::{self, SIGTSTP},
+        wait::WaitStatus,
+    },
     unistd::Pid,
 };
 
@@ -10,7 +13,7 @@ pub struct JobTable {
     jobs: Vec<Job>,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProcState {
     Running,
     Stopped,
@@ -44,7 +47,12 @@ impl Job {
     }
 
     pub fn exit_code(&self) -> i32 {
-        todo!()
+        match self.proc.last().map(|p| p.state) {
+            Some(ProcState::Exitted(c)) => c,
+            Some(ProcState::Signaled(sig)) => 128 + sig as i32,
+            Some(ProcState::Stopped) => 128 + SIGTSTP as i32,
+            _ => 0,
+        }
     }
     pub fn was_interrupted(&self) -> bool {
         todo!()
