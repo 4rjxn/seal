@@ -152,7 +152,17 @@ impl JobTable {
         }
         None
     }
-    pub fn mark_continued(&mut self, id: usize) {}
+    pub fn mark_continued(&mut self, id: usize) {
+        if let Some(job) = self.get_mut(id) {
+            for p in &mut job.proc {
+                if p.state == ProcState::Stopped {
+                    p.state = ProcState::Running
+                }
+            }
+            job.notified = false;
+        }
+    }
+
     pub fn set_background(&mut self, id: usize, background: bool) {}
     pub fn mark_notified(&mut self, id: usize) {}
     pub fn take_events(&mut self) -> Vec<JobEvent> {
