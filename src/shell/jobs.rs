@@ -1,4 +1,4 @@
-use std::fmt::{Display, write};
+use std::fmt::Display;
 
 use nix::{
     sys::{
@@ -108,6 +108,9 @@ pub enum JobState {
 impl JobTable {
     pub fn new() -> Self {
         Self::default()
+    }
+    pub fn iter(&self) -> impl Iterator<Item = &Job> {
+        self.jobs.iter()
     }
     pub fn add(&mut self, pgid: Pid, command: String, childern: &[Pid], background: bool) -> usize {
         let id = self.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
