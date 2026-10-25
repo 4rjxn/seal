@@ -113,7 +113,7 @@ impl JobTable {
         id
     }
     pub fn get(&self, id: usize) -> Option<&Job> {
-        todo!()
+        self.jobs.iter().find(|j| j.id == id)
     }
     fn get_mut(&mut self, id: usize) -> Option<&mut Job> {
         todo!()
