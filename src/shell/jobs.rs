@@ -119,7 +119,9 @@ impl JobTable {
         self.jobs.iter_mut().find(|j| j.id == id)
     }
 
-    pub fn remove(&mut self, id: usize) {}
+    pub fn remove(&mut self, id: usize) {
+        self.jobs.retain(|j| j.id != id);
+    }
 
     pub fn pgids(&self) -> Vec<Pid> {
         todo!()
