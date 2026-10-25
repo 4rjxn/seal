@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Display, write};
 
 use nix::{
     sys::{
@@ -71,6 +71,22 @@ pub enum JobEvent {
         command: String,
         exit_code: i32,
     },
+}
+
+impl Display for Job {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]+ {}\t{}", self.id, self.state(), self.command)
+    }
+}
+
+impl Display for JobState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JobState::Running => write!(f, "Running"),
+            JobState::Stopped => write!(f, "Stopped"),
+            JobState::Done => write!(f, "Done"),
+        }
+    }
 }
 
 impl Display for JobEvent {
