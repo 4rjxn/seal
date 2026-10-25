@@ -8,6 +8,8 @@ use nix::{
     unistd::Pid,
 };
 
+use crate::shell::jobs;
+
 #[derive(Default)]
 pub struct JobTable {
     jobs: Vec<Job>,
@@ -132,7 +134,23 @@ impl JobTable {
     }
 
     pub fn apply_status(&mut self, st: WaitStatus) -> Option<usize> {
-        todo!()
+        let (pid, new) = match st {
+            WaitStatus::Exited(p, c) => (p, ProcState::Exitted(c)),
+            WaitStatus::Signaled(p, s, _) => (p, ProcState::Signaled(s)),
+            WaitStatus::Stopped(p, _) => (p, ProcState::Stopped),
+            WaitStatus::Continued(p) => (p, ProcState::Running),
+            _ => return None,
+        };
+        for job in &mut self.jobs {
+            if let Some(proc) = job.proc.iter_mut().find(|p| p.pid == pid) {
+                proc.state = new;
+                if new == ProcState::Running {
+                    job.notified = false
+                }
+                return Some(job.id);
+            }
+        }
+        None
     }
     pub fn mark_continued(&mut self, id: usize) {}
     pub fn set_background(&mut self, id: usize, background: bool) {}
