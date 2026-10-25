@@ -116,7 +116,7 @@ impl JobTable {
         self.jobs.iter().find(|j| j.id == id)
     }
     fn get_mut(&mut self, id: usize) -> Option<&mut Job> {
-        todo!()
+        self.jobs.iter_mut().find(|j| j.id == id)
     }
 
     pub fn remove(&mut self, id: usize) {}
