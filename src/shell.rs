@@ -3,13 +3,15 @@ use nix::unistd::{Pid, getpgrp};
 use crate::{
     lexer,
     parser::{self, node::SyntaxNode},
-    shell::{builtins::BuiltinRegistry, env::Env, jobs::JobTable},
+    shell::{builtins::BuiltinRegistry, env::Env, jobs::JobTable, opts::ShellOpts},
 };
 
 mod builtins;
 pub mod env;
 pub mod executor;
+pub mod job_control;
 pub mod jobs;
+pub mod opts;
 pub mod shell_error;
 
 pub struct Shell {
@@ -18,16 +20,22 @@ pub struct Shell {
     pub last_exit: i32,
     pub shell_pgid: Pid,
     pub builtins: BuiltinRegistry,
+    pub shell_opts: ShellOpts,
 }
 
 impl Shell {
     pub fn new() -> Self {
+        Self::with_opts(ShellOpts::default())
+    }
+
+    pub fn with_opts(opts: ShellOpts) -> Self {
         Self {
             env: Env::new(),
             jobs: JobTable::new(),
             last_exit: 0,
             shell_pgid: getpgrp(),
             builtins: BuiltinRegistry::with_default(),
+            shell_opts: opts,
         }
     }
 

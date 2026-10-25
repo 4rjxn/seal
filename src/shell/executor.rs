@@ -1,6 +1,6 @@
 use std::{
     ffi::CString,
-    io::{IsTerminal, Write, stderr, stdin, stdout},
+    io::{Write, stderr, stdout},
     os::{
         fd::{BorrowedFd, FromRawFd, OwnedFd, RawFd},
         unix::ffi::OsStrExt,
@@ -12,17 +12,16 @@ use std::{
 use is_executable::IsExecutable;
 use nix::{
     Error,
-    errno::Errno::{EACCES, ECHILD, EINTR},
+    errno::Errno::EACCES,
     fcntl::{FcntlArg, OFlag, open},
-    libc::{STDIN_FILENO, STDOUT_FILENO, tcsetpgrp},
+    libc::STDOUT_FILENO,
     sys::{
         signal::{
             SigHandler,
-            Signal::{self, SIGINT, SIGTERM},
-            kill, signal,
+            Signal::{self},
+            signal,
         },
         stat::Mode,
-        wait::{WaitPidFlag, WaitStatus, waitpid},
     },
     unistd::{Pid, dup2_raw, dup2_stderr, dup2_stdin, dup2_stdout, execve, fork, pipe2, setpgid},
 };
@@ -32,7 +31,7 @@ use crate::{
     shell::{
         Shell,
         builtins::run_builtin,
-        jobs::{Job, JobStatus},
+        job_control::{abort_launch, wait_foreground},
     },
 };
 
@@ -76,22 +75,15 @@ fn execute_background(shell: &mut Shell, syntax: &SyntaxNode) -> i32 {
         complex => match unsafe { fork() } {
             Ok(f) => match f {
                 nix::unistd::ForkResult::Child => {
+                    let _ = setpgid(Pid::from_raw(0), Pid::from_raw(0));
+                    reset_child_signals();
                     let exit_code = execute(shell, complex);
                     exit(exit_code);
                 }
                 nix::unistd::ForkResult::Parent { child } => {
-                    shell.jobs.add(Job {
-                        id: 0,
-                        pgid: child,
-                        status: JobStatus::Running,
-                        command: format!("Background Job {child}"),
-                        children: vec![child],
-                    });
-                    println!(
-                        "[{}] {}",
-                        shell.jobs.find_by_pgid(child).map(|j| j.id).unwrap_or(1),
-                        child
-                    );
+                    let _ = setpgid(child, child);
+                    let id = shell.jobs.add(child, format!("{child}"), &[child], true);
+                    println!("[{id}] {child}",);
                     0 //return successes
                 }
             },
@@ -127,10 +119,7 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
             Err(e) => {
                 eprintln!("seal: pipe creation failed {e}");
                 drop(prev_read);
-                if let Some(job_pgid) = pgid {
-                    let _ = kill(job_pgid, SIGTERM);
-                    let _ = wait_pipeline(shell, job_pgid, children, is_background);
-                }
+                let _ = abort_launch(pgid, &children);
                 return 1;
             }
         };
@@ -141,10 +130,7 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
                 eprintln!("seal: fork failed: {e}");
                 drop(write_end);
                 drop(prev_read);
-                if let Some(job_pgid) = pgid {
-                    let _ = kill(job_pgid, SIGTERM);
-                    let _ = wait_pipeline(shell, job_pgid, children, is_background);
-                }
+                let _ = abort_launch(pgid, &children);
                 return 1;
             }
         };
@@ -161,7 +147,13 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
         prev_read = read_end;
     }
     if let Some(job_pgid) = pgid {
-        wait_pipeline(shell, job_pgid, children, is_background)
+        wait_pipeline(
+            shell,
+            job_pgid.to_string(),
+            job_pgid,
+            children,
+            is_background,
+        )
     } else {
         0 //return successes
     }
@@ -253,80 +245,35 @@ fn apply_redirects(redirects: &Vec<Redirect>) -> Result<(), String> {
     Ok(())
 }
 
-fn wait_pipeline(shell: &mut Shell, pgid: Pid, children: Vec<Pid>, is_background: bool) -> i32 {
-    let is_tty = stdin().is_terminal();
+fn wait_pipeline(
+    shell: &mut Shell,
+    command: String,
+    pgid: Pid,
+    children: Vec<Pid>,
+    is_background: bool,
+) -> i32 {
+    let id = shell.jobs.add(pgid, command, &children, is_background);
     if is_background {
-        shell.jobs.add(Job {
-            id: 0,
-            pgid,
-            status: JobStatus::Running,
-            command: format!("Job {pgid}"),
-            children,
-        });
-        println!(
-            "[{}] {}",
-            shell.jobs.find_by_pgid(pgid).map(|j| j.id).unwrap_or(1),
-            pgid
-        );
+        println!("[{id}] {pgid}");
         return 0;
     }
-    if is_tty {
-        unsafe {
-            tcsetpgrp(STDIN_FILENO, pgid.as_raw());
-        }
-    }
-    let mut active_jobs = children.len();
-    let mut job_suspended = false;
-    let last_child_pid = children.last().copied();
-    let mut last_exit_code = 0;
-    while active_jobs > 0 {
-        match waitpid(Pid::from_raw(-pgid.as_raw()), Some(WaitPidFlag::WUNTRACED)) {
-            Ok(WaitStatus::Exited(pid, exit_code)) => {
-                active_jobs -= 1;
-                if Some(pid) == last_child_pid {
-                    last_exit_code = exit_code;
-                }
-            }
-            Ok(WaitStatus::Signaled(pid, signal, _)) => {
-                active_jobs -= 1;
-                if Some(pid) == last_child_pid {
-                    last_exit_code = 128 + signal as i32;
-                }
-                if signal == SIGINT {
-                    println!()
-                }
-            }
-            Ok(WaitStatus::Stopped(_, _)) => {
-                job_suspended = true;
-                break;
-            }
-            Err(ECHILD) => break,
-            Err(EINTR) => continue,
-            _ => break,
-        }
-    }
-    if job_suspended {
-        shell.jobs.add(Job {
-            id: 0,
-            pgid,
-            status: JobStatus::Suspended,
-            command: format!("Job {pgid}"),
-            children,
-        });
-
-        if let Some(job) = shell.jobs.find_by_pgid(pgid) {
-            println!("\n[{}] + Suspended\t{}", job.id, job.command);
-        }
-        last_exit_code = 148;
+    let Some(outcome) = wait_foreground(
+        &mut shell.jobs,
+        id,
+        false,
+        shell.shell_opts.is_interactive,
+        shell.shell_pgid,
+    ) else {
+        return 1;
+    };
+    if outcome.interrupted {
+        println!();
     }
 
-    if is_tty {
-        unsafe {
-            tcsetpgrp(STDIN_FILENO, shell.shell_pgid.as_raw());
-        }
-    }
-
-    last_exit_code
+    if let Some(ev) = outcome.event {
+        println!("\n{ev}");
+    };
+    return outcome.exit_code;
 }
 
 fn make_pipe_if_needed(has_next: bool) -> Result<(Option<OwnedFd>, Option<OwnedFd>), Error> {
@@ -345,8 +292,6 @@ fn spawn_child(
 ) -> nix::Result<Pid> {
     match unsafe { fork()? } {
         nix::unistd::ForkResult::Child => {
-            reset_child_signals();
-
             let target_pgid = pgid.unwrap_or(Pid::from_raw(0));
             let _ = setpgid(Pid::from_raw(0), target_pgid);
 
@@ -389,6 +334,7 @@ fn exec_external(shell: &mut Shell, cmd: &UnitCommand) -> ! {
         .collect();
 
     let c_env = shell.env.as_execve_list();
+    reset_child_signals();
     match execve(&c_path, &c_args, &c_env) {
         Err(EACCES) => {
             eprintln!("seal: {program} Permission denied");

@@ -5,7 +5,7 @@ use nix::{
     sys::signal::{SigHandler, Signal, signal},
     unistd::{Pid, isatty, setpgid},
 };
-use seal::shell::Shell;
+use seal::shell::{Shell, job_control::reap_background, opts::ShellOpts};
 
 use crate::repl::Repl;
 mod prompt;
@@ -20,7 +20,9 @@ fn main() {
     // `tcsetpgrp` below would attach the terminal to the wrong group.
     let _ = setpgid(Pid::from_raw(0), Pid::from_raw(0));
 
-    let mut shell = Shell::new();
+    let mut shell = Shell::with_opts(ShellOpts {
+        is_interactive: true,
+    });
     if isatty(stdin()).unwrap_or(false)
         && unsafe { tcsetpgrp(STDIN_FILENO, shell.shell_pgid.as_raw()) } != 0
     {
@@ -31,7 +33,9 @@ fn main() {
     }
     let mut repl = Repl::new();
     loop {
-        shell.jobs.update_done();
+        for msg in reap_background(&mut shell.jobs) {
+            eprintln!("\n{}", msg)
+        }
         if let Some(str) = repl.read() {
             let _ = shell.execute_str(&str);
         } else {
@@ -45,5 +49,6 @@ fn set_signals_for_parent() {
         signal(Signal::SIGTSTP, SigHandler::SigIgn).unwrap();
         signal(Signal::SIGTTOU, SigHandler::SigIgn).unwrap();
         signal(Signal::SIGTTIN, SigHandler::SigIgn).unwrap();
+        signal(Signal::SIGINT, SigHandler::SigIgn).unwrap();
     }
 }

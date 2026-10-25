@@ -7,6 +7,7 @@ use crate::shell::{
     builtins::{cd::Cd, exit::Exit},
     env::Env,
     jobs::JobTable,
+    opts::ShellOpts,
 };
 
 mod cd;
@@ -18,6 +19,7 @@ pub struct ShellContext<'a> {
     pub jobs: &'a mut JobTable,
     pub last_exit: &'a mut i32,
     pub shell_pgid: Pid,
+    pub shell_opts: &'a mut ShellOpts,
 }
 
 //the builtin trait every builtin should
@@ -55,6 +57,7 @@ pub fn run_builtin(shell: &mut Shell, args: &[String]) -> Option<i32> {
         last_exit,
         shell_pgid,
         builtins,
+        shell_opts,
     } = shell;
     let b = builtins.get(args.first()?)?;
     let mut ctx = ShellContext {
@@ -62,6 +65,7 @@ pub fn run_builtin(shell: &mut Shell, args: &[String]) -> Option<i32> {
         jobs,
         last_exit,
         shell_pgid: *shell_pgid,
+        shell_opts,
     };
     let exit_code = b.run(&mut ctx, args);
     let _ = std::io::stdout().flush();
