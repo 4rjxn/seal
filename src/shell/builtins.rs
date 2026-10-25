@@ -4,7 +4,7 @@ use nix::unistd::Pid;
 
 use crate::shell::{
     Shell,
-    builtins::{cd::Cd, exit::Exit},
+    builtins::{cd::Cd, exit::Exit, fg::Fg},
     env::Env,
     jobs::JobTable,
     opts::ShellOpts,
@@ -12,6 +12,7 @@ use crate::shell::{
 
 mod cd;
 mod exit;
+mod fg;
 
 //the helper struct which holds mutable refrence to shell different fields.
 pub struct ShellContext<'a> {
@@ -40,6 +41,7 @@ impl BuiltinRegistry {
         let mut r = Self::default();
         r.register(Box::new(Exit));
         r.register(Box::new(Cd));
+        r.register(Box::new(Fg));
         r
     }
     pub fn register(&mut self, b: Box<dyn BuiltIn>) {
