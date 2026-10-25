@@ -35,9 +35,6 @@ impl Repl {
             let readline = self.editor.readline(set_prompt().as_str());
             match readline {
                 Ok(line) => {
-                    if line.trim().is_empty() {
-                        continue;
-                    }
                     let _ = self.editor.add_history_entry(line.as_str());
                     let _ = self.editor.save_history(&self.history_path);
                     return Some(line);

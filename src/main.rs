@@ -37,6 +37,9 @@ fn main() {
             eprintln!("\n{}", msg)
         }
         if let Some(str) = repl.read() {
+            if str.trim().is_empty() {
+                continue;
+            }
             let _ = shell.execute_str(&str);
         } else {
             exit(shell.last_exit)
