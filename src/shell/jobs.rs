@@ -124,7 +124,11 @@ impl JobTable {
     }
 
     pub fn pgids(&self) -> Vec<Pid> {
-        todo!()
+        self.jobs
+            .iter()
+            .filter(|j| j.state() != JobState::Done)
+            .map(|j| j.pgid)
+            .collect()
     }
 
     pub fn apply_status(&mut self, st: WaitStatus) -> Option<usize> {
