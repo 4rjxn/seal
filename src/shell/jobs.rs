@@ -156,6 +156,22 @@ impl JobTable {
     pub fn set_background(&mut self, id: usize, background: bool) {}
     pub fn mark_notified(&mut self, id: usize) {}
     pub fn take_events(&mut self) -> Vec<JobEvent> {
-        todo!()
+        let mut events = Vec::new();
+        for job in &mut self.jobs {
+            match job.state() {
+                JobState::Stopped => events.push(JobEvent::Stopped {
+                    id: job.id,
+                    command: job.command.clone(),
+                }),
+                JobState::Done => events.push(JobEvent::Done {
+                    id: job.id,
+                    command: job.command.clone(),
+                    exit_code: job.exit_code(),
+                }),
+                _ => {}
+            }
+        }
+        self.jobs.retain(|j| j.state() != JobState::Done);
+        events
     }
 }
