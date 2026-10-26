@@ -7,13 +7,14 @@ use nix::{
 };
 use seal::shell::{Shell, job_control::reap_background, opts::ShellOpts};
 
-use crate::repl::Repl;
+use crate::{repl::Repl, version::print_version};
 mod prompt;
 mod repl;
+mod version;
 
 fn main() {
+    handle_args();
     set_signals_for_parent();
-
     // Make the shell the leader of its own process group before claiming the
     // terminal. Without this, `Pid::this()` is not a valid pgid when the shell
     // was not started by a job-control shell (e.g. `cargo run`), and the
@@ -53,5 +54,16 @@ fn set_signals_for_parent() {
         signal(Signal::SIGTTOU, SigHandler::SigIgn).unwrap();
         signal(Signal::SIGTTIN, SigHandler::SigIgn).unwrap();
         signal(Signal::SIGINT, SigHandler::SigIgn).unwrap();
+    }
+}
+
+fn handle_args() {
+    let args: Vec<String> = std::env::args().collect();
+    if matches!(
+        args.get(1).map(String::as_str),
+        Some("--version" | "-v" | "-V")
+    ) {
+        print_version();
+        exit(0);
     }
 }
