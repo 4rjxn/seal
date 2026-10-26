@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     fs, io,
     path::{Path, PathBuf},
 };
@@ -8,15 +7,12 @@ use rustyline::{
     Helper,
     completion::{Completer, Pair},
     error::ReadlineError,
-    highlight::{CmdKind, Highlighter},
+    highlight::Highlighter,
     hint::Hinter,
     validate::Validator,
 };
 
-use crate::{
-    traits::EscapeTrait,
-    utils::{get_path_from_env, is_builtin},
-};
+use crate::repl::string_traits::EscapeSpaces;
 
 pub struct FileCompletion {}
 
@@ -67,7 +63,7 @@ impl Completer for FileCompletion {
                 let name = name.escape_spaces();
                 matches.push(Pair {
                     display: name.to_string(),
-                    replacement: produce_replacement(&path, name, parent.to_string()),
+                    replacement: produce_replacement(&path, String::from(name), parent.to_string()),
                 });
             }
         }
@@ -88,29 +84,30 @@ impl Hinter for FileCompletion {
 }
 
 impl Highlighter for FileCompletion {
-    fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
-        Cow::Owned(highlight_words(line))
-    }
-    fn highlight_char(&self, _line: &str, _pos: usize, kind: CmdKind) -> bool {
-        if kind == CmdKind::Other {
-            return true;
-        }
-        return false;
-    }
+    //fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
+    //    Cow::Owned(highlight_words(line))
+    //}
+    //fn highlight_char(&self, _line: &str, _pos: usize, kind: CmdKind) -> bool {
+    //    if kind == CmdKind::Other {
+    //        return true;
+    //    }
+    //    return false;
+    //}
 }
 
-fn highlight_words<'l>(line: &'l str) -> String {
-    let words = line.split_whitespace();
-    let mut highlighted_sting = String::new();
-    words.for_each(|word| match get_path_from_env(&word.to_string()) {
-        Ok(_) => highlighted_sting.push_str(&format!("\x1b[1;97m{}\x1b[0m ", word)),
-        Err(_) => match is_builtin(word) {
-            Some(_) => highlighted_sting.push_str(&format!("\x1b[1;93m{}\x1b[0m ", word)),
-            None => highlighted_sting.push_str(&format!("{} ", word)),
-        },
-    });
-    highlighted_sting
-}
+//fn _highlight_words<'l>(line: &'l str) -> String {
+//let words = line.split_whitespace();
+//let mut highlighted_sting = String::new();
+//words.for_each(|word| match get_path_from_env(&word.to_string()) {
+//    Ok(_) => highlighted_sting.push_str(&format!("\x1b[1;97m{}\x1b[0m ", word)),
+//    Err(_) => match is_builtin(word) {
+//        Some(_) => highlighted_sting.push_str(&format!("\x1b[1;93m{}\x1b[0m ", word)),
+//        None => highlighted_sting.push_str(&format!("{} ", word)),
+//    },
+//});
+//highlighted_sting
+//String::from(line)
+//}
 
 impl Validator for FileCompletion {}
 impl Helper for FileCompletion {}
