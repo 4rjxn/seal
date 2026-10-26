@@ -10,7 +10,10 @@ impl BuiltIn for Exit {
     }
 
     fn help(&self) -> &str {
-        "exit the shell"
+        "Usage: exit [code]\n\
+        \n\
+         exit the shell with given code.\n\
+         if there is no code provided the exit code of last command will be used"
     }
 
     fn run(&self, ctx: &mut super::ShellContext, _args: &[String]) -> i32 {

@@ -10,7 +10,11 @@ impl BuiltIn for Cd {
     }
 
     fn help(&self) -> &str {
-        "used to change directory"
+        "Usage: cd [path]\n\
+        \n\
+         change current directory to the given path\n\
+         if no path is given it will be changed to $HOME\n\
+         if '-' is given as path it will be changed to $OLDPWD"
     }
 
     fn run(&self, ctx: &mut super::ShellContext, args: &[String]) -> i32 {

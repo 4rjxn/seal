@@ -8,7 +8,9 @@ impl BuiltIn for Job {
     }
 
     fn help(&self) -> &str {
-        "prints jobs present in jobtable"
+        "Usage: job\n\
+        \n\
+        prints jobs present in jobtable."
     }
 
     fn run(&self, ctx: &mut super::ShellContext, _args: &[String]) -> i32 {

@@ -8,7 +8,12 @@ impl BuiltIn for Fg {
     }
 
     fn help(&self) -> &str {
-        "foregrounds the latest job or job of a given id"
+        "Usage: fg [job id]\n\
+        \n\
+        fg is a builtin command\n\
+        it foregrounds the latest job or job of a given id.\n\
+        currently it can only foreground the latest job.\n\
+        (i havent implemented fg based on id yet :)"
     }
 
     fn run(&self, ctx: &mut super::ShellContext, _args: &[String]) -> i32 {
