@@ -64,6 +64,10 @@ pub fn run_builtin(shell: &mut Shell, args: &[String]) -> Option<i32> {
         shell_opts,
     } = shell;
     let b = builtins.get(args.first()?)?;
+    if args.get(1).map(String::as_str) == Some("--help") {
+        println!("{}", b.help());
+        return Some(0);
+    }
     let mut ctx = ShellContext {
         env,
         jobs,
