@@ -1,8 +1,9 @@
 use std::env;
 use std::path::PathBuf;
 
-use rustyline::ColorMode;
+use rustyline::Cmd::{HistorySearchBackward, HistorySearchForward};
 use rustyline::config::Configurer;
+use rustyline::{ColorMode, KeyCode, KeyEvent, Modifiers};
 use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 
 use crate::prompt::set_prompt;
@@ -21,6 +22,16 @@ impl Repl {
         let mut editor = Editor::<FileCompletion, DefaultHistory>::new().unwrap();
         editor.set_helper(Some(FileCompletion {}));
         editor.set_color_mode(ColorMode::Enabled);
+        editor.bind_sequence(
+            KeyEvent(KeyCode::Up, Modifiers::NONE),
+            HistorySearchBackward,
+        );
+        editor.bind_sequence(
+            KeyEvent(KeyCode::Down, Modifiers::NONE),
+            HistorySearchForward,
+        );
+        editor.bind_sequence(KeyEvent::ctrl('p'), HistorySearchBackward);
+        editor.bind_sequence(KeyEvent::ctrl('n'), HistorySearchForward);
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let history_path = PathBuf::from(home).join(".seal_history");
 
@@ -55,5 +66,11 @@ impl Repl {
                 }
             }
         }
+    }
+}
+
+impl Default for Repl {
+    fn default() -> Self {
+        Self::new()
     }
 }
