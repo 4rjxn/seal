@@ -33,10 +33,10 @@ fn main() {
     }
     let mut repl = Repl::new();
     loop {
-        for msg in reap_background(&mut shell.jobs) {
-            eprintln!("\n{}", msg)
-        }
         if let Some(str) = repl.read() {
+            for msg in reap_background(&mut shell.jobs) {
+                eprintln!("\n{}", msg)
+            }
             if str.trim().is_empty() {
                 continue;
             }
