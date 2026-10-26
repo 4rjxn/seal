@@ -6,16 +6,20 @@ use rustyline::config::Configurer;
 use rustyline::{Editor, error::ReadlineError, history::DefaultHistory};
 
 use crate::prompt::set_prompt;
+use crate::repl::file_completion::FileCompletion;
+
+mod file_completion;
+mod string_traits;
 
 pub struct Repl {
-    editor: Editor<(), DefaultHistory>,
+    editor: Editor<FileCompletion, DefaultHistory>,
     history_path: PathBuf,
 }
 
 impl Repl {
     pub fn new() -> Self {
-        let mut editor = Editor::<(), DefaultHistory>::new().unwrap();
-        //editor.set_helper(Some({}));
+        let mut editor = Editor::<FileCompletion, DefaultHistory>::new().unwrap();
+        editor.set_helper(Some(FileCompletion {}));
         editor.set_color_mode(ColorMode::Enabled);
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
         let history_path = PathBuf::from(home).join(".seal_history");
