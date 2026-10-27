@@ -32,7 +32,7 @@ impl BuiltIn for LuaBuiltin {
                 self.lua.globals().get("seal")?,
                 &self.lua,
             )?;
-            self.func.call::<Option<i32>>(args.to_vec())?;
+            self.func.call::<Option<i32>>(&args[1..])?;
             Ok(())
         });
         match result {
