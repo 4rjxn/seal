@@ -1,7 +1,4 @@
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::Path};
 
 use rustyline::{
     Helper,
@@ -25,22 +22,16 @@ impl Completer for FileCompletion {
         _ctx: &rustyline::Context<'_>,
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
         let total_length = line.len();
-        let prefix;
-        match line.split_whitespace().last() {
-            Some(l) => prefix = l,
-            None => prefix = "",
-        }
-        let child = match prefix.split("/").last() {
-            Some(last) => last,
-            None => "",
-        };
+
+        let prefix = line.split_whitespace().last().unwrap_or_default();
+        let child = prefix.split("/").last().unwrap_or_default();
         let parent = match prefix.strip_suffix(child) {
             Some(p) => p,
             None => prefix,
         };
         let final_length = total_length - prefix.len();
         let mut matches = Vec::new();
-        let path = Path::new(".").join(&parent);
+        let path = Path::new(".").join(parent);
         let mut entries = match fs::read_dir(&path) {
             Ok(path) => path
                 .map(|res| res.map(|e| e.path()))
@@ -53,7 +44,7 @@ impl Completer for FileCompletion {
         for entry in entries {
             let file_name = entry.file_name();
             let name = file_name.unwrap().to_str().unwrap();
-            if prefix == "" {
+            if prefix.is_empty() {
                 let name = name.escape_spaces();
                 matches.push(Pair {
                     display: name.to_string(),
@@ -63,7 +54,7 @@ impl Completer for FileCompletion {
                 let name = name.escape_spaces();
                 matches.push(Pair {
                     display: name.to_string(),
-                    replacement: produce_replacement(&path, String::from(name), parent.to_string()),
+                    replacement: produce_replacement(&path, name, parent.to_string()),
                 });
             }
         }
@@ -71,7 +62,7 @@ impl Completer for FileCompletion {
     }
 }
 
-fn produce_replacement(path: &PathBuf, name: String, parent: String) -> String {
+fn produce_replacement(path: &Path, name: String, parent: String) -> String {
     if path.join(&name).is_file() {
         format!("{}{}", parent, name)
     } else {

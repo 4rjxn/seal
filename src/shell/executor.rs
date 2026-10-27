@@ -119,7 +119,7 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
             Err(e) => {
                 eprintln!("seal: pipe creation failed {e}");
                 drop(prev_read);
-                let _ = abort_launch(pgid, &children);
+                abort_launch(pgid, &children);
                 return 1;
             }
         };
@@ -130,7 +130,7 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
                 eprintln!("seal: fork failed: {e}");
                 drop(write_end);
                 drop(prev_read);
-                let _ = abort_launch(pgid, &children);
+                abort_launch(pgid, &children);
                 return 1;
             }
         };
@@ -273,7 +273,7 @@ fn wait_pipeline(
     if let Some(ev) = outcome.event {
         println!("\n{ev}");
     };
-    return outcome.exit_code;
+    outcome.exit_code
 }
 
 fn make_pipe_if_needed(has_next: bool) -> Result<(Option<OwnedFd>, Option<OwnedFd>), Error> {

@@ -105,12 +105,7 @@ pub fn abort_launch(pgid: Option<Pid>, children: &[Pid]) {
     }
 
     for &pid in children {
-        loop {
-            match waitpid(pid, None) {
-                Err(EINTR) => continue,
-                _ => break,
-            }
-        }
+        while let Err(EINTR) = waitpid(pid, None) {}
     }
 }
 

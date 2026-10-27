@@ -15,7 +15,7 @@ impl LuaEngine {
         let lua = Lua::new();
         let seal = lua.create_table()?;
         lua.globals().set("seal", seal)?;
-        Ok(Self { lua: lua })
+        Ok(Self { lua })
     }
     pub fn run_luafile(&self, shell: &mut Shell, file: PathBuf) -> mlua::Result<()> {
         let script = fs::read_to_string(file)?;
