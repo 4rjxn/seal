@@ -1,6 +1,6 @@
 use std::{env::set_current_dir, path::PathBuf};
 
-use crate::shell::{self, Shell, builtins::BuiltIn};
+use crate::shell::{Shell, builtins::BuiltIn};
 
 pub struct Cd;
 

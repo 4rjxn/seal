@@ -2,10 +2,7 @@ use std::cell::RefCell;
 
 use mlua::{Function, Lua, Scope, Table};
 
-use crate::{
-    lua::builtins::LuaBuiltin,
-    shell::{Shell, builtins::ShellContext},
-};
+use crate::{lua::builtins::LuaBuiltin, shell::Shell};
 
 pub fn setup_lua_scope<'lua, 'scope>(
     shell: &'scope RefCell<&mut Shell>,
