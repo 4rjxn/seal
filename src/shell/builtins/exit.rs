@@ -1,6 +1,6 @@
 use std::process::exit;
 
-use crate::shell::builtins::BuiltIn;
+use crate::shell::{Shell, builtins::BuiltIn};
 
 pub struct Exit;
 
@@ -16,7 +16,7 @@ impl BuiltIn for Exit {
          if there is no code provided the exit code of last command will be used"
     }
 
-    fn run(&self, ctx: &mut super::ShellContext, _args: &[String]) -> i32 {
-        exit(*ctx.last_exit);
+    fn run(&self, ctx: &mut Shell, _args: &[String]) -> i32 {
+        exit(ctx.last_exit);
     }
 }

@@ -1,4 +1,4 @@
-use crate::shell::builtins::BuiltIn;
+use crate::shell::{Shell, builtins::BuiltIn};
 
 pub struct Job;
 
@@ -13,7 +13,7 @@ impl BuiltIn for Job {
         prints jobs present in jobtable."
     }
 
-    fn run(&self, ctx: &mut super::ShellContext, _args: &[String]) -> i32 {
+    fn run(&self, ctx: &mut Shell, _args: &[String]) -> i32 {
         if !ctx.shell_opts.is_interactive {
             return 0;
         }

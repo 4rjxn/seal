@@ -1,6 +1,6 @@
 use std::{io::Write, thread::sleep, time::Duration};
 
-use crate::shell::builtins::BuiltIn;
+use crate::shell::{Shell, builtins::BuiltIn};
 
 pub struct Summon;
 
@@ -45,7 +45,7 @@ impl BuiltIn for Summon {
          Display the Seal of Solomon. (eye candy)"
     }
 
-    fn run(&self, _ctx: &mut super::ShellContext, _args: &[String]) -> i32 {
+    fn run(&self, _ctx: &mut Shell, _args: &[String]) -> i32 {
         print!("{BOLD_RED}{BANNER_TOP}{RESET}");
         for line in SEAL.lines() {
             println!("{RED}{line}{RESET}");

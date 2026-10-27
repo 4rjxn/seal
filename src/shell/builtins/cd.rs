@@ -1,6 +1,6 @@
 use std::{env::set_current_dir, path::PathBuf};
 
-use crate::shell::builtins::BuiltIn;
+use crate::shell::{self, Shell, builtins::BuiltIn};
 
 pub struct Cd;
 
@@ -17,7 +17,7 @@ impl BuiltIn for Cd {
          if '-' is given as path it will be changed to $OLDPWD"
     }
 
-    fn run(&self, ctx: &mut super::ShellContext, args: &[String]) -> i32 {
+    fn run(&self, ctx: &mut Shell, args: &[String]) -> i32 {
         if args.len() > 2 {
             eprintln!("seal: cd: too many arguments");
             return 1;
