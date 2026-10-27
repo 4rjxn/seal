@@ -4,7 +4,7 @@ use nix::unistd::Pid;
 
 use crate::shell::{
     Shell,
-    builtins::{cd::Cd, exit::Exit, job::Job, summon::Summon},
+    builtins::{cd::Cd, exit::Exit, fg::Fg, job::Job, summon::Summon},
     env::Env,
     jobs::JobTable,
     opts::ShellOpts,
@@ -12,6 +12,7 @@ use crate::shell::{
 
 mod cd;
 mod exit;
+mod fg;
 mod job;
 mod summon;
 
@@ -44,6 +45,7 @@ impl BuiltinRegistry {
         r.register(Box::new(Cd));
         r.register(Box::new(Job));
         r.register(Box::new(Summon));
+        r.register(Box::new(Fg));
         r
     }
     pub fn register(&mut self, b: Box<dyn BuiltIn>) {
