@@ -36,13 +36,23 @@ fn main() {
         );
     }
 
-    let engine = LuaEngine::new().unwrap();
-    match engine.run_luafile(&mut shell, PathBuf::from("./init.lua")) {
-        Ok(_) => {}
-        Err(_) => {
-            eprintln!("seal: running without custom config")
+    let engine = LuaEngine::new().ok();
+    let config_path = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        .map(|p| p.join("seal/init.lua"));
+
+    match &engine {
+        Some(e) => {
+            if let Some(path) = config_path {
+                if let Err(_) = e.run_luafile(&mut shell, path) {
+                    eprintln!("seal: running without any config");
+                };
+            }
         }
+        None => {}
     }
+
     let mut repl = Repl::new();
     loop {
         if let Some(str) = repl.read() {
