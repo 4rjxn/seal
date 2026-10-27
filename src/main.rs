@@ -1,11 +1,14 @@
-use std::{io::stdin, process::exit};
+use std::{io::stdin, path::PathBuf, process::exit};
 
 use nix::{
     libc::{STDIN_FILENO, tcsetpgrp},
     sys::signal::{SigHandler, Signal, signal},
     unistd::{Pid, isatty, setpgid},
 };
-use seal::shell::{Shell, job_control::reap_background, opts::ShellOpts};
+use seal::{
+    lua::LuaEngine,
+    shell::{Shell, job_control::reap_background, opts::ShellOpts},
+};
 
 use crate::{repl::Repl, version::print_version};
 mod prompt;
@@ -31,6 +34,14 @@ fn main() {
             "seal: failed to take control of the terminal: {}",
             std::io::Error::last_os_error()
         );
+    }
+
+    let engine = LuaEngine::new().unwrap();
+    match engine.run_luafile(&mut shell, PathBuf::from("./init.lua")) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("seal: lua: {e}")
+        }
     }
     let mut repl = Repl::new();
     loop {
