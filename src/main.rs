@@ -39,8 +39,8 @@ fn main() {
     let engine = LuaEngine::new().unwrap();
     match engine.run_luafile(&mut shell, PathBuf::from("./init.lua")) {
         Ok(_) => {}
-        Err(e) => {
-            eprintln!("seal: lua: {e}")
+        Err(_) => {
+            eprintln!("seal: running without custom config")
         }
     }
     let mut repl = Repl::new();

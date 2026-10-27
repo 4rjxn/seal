@@ -40,7 +40,7 @@ impl Env {
             })
             .collect()
     }
-    fn _cwd(&self) -> &Path {
+    pub fn cwd(&self) -> &Path {
         &self.cwd
     }
     pub fn set_cwd(&mut self, path: PathBuf) {
