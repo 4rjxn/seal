@@ -1,4 +1,4 @@
-use crate::shell::{builtins::BuiltIn, job_control::wait_foreground};
+use crate::shell::{Shell, builtins::BuiltIn, job_control::wait_foreground};
 
 pub struct Fg;
 
@@ -16,7 +16,7 @@ impl BuiltIn for Fg {
         (i havent implemented fg based on id yet :)"
     }
 
-    fn run(&self, ctx: &mut super::ShellContext, _args: &[String]) -> i32 {
+    fn run(&self, ctx: &mut Shell, _args: &[String]) -> i32 {
         // this is not a complete implementation, this is just built to get a quick 'fg'
         // command since fg is  something i frequently use. for now fg only foregrounds the
         // most recent job form the jobtable
@@ -25,11 +25,11 @@ impl BuiltIn for Fg {
             eprintln!("seal: fg: no jobs to foreground");
             return 1;
         }
-        let Some(job) = ctx.jobs.current_job() else {
+        let Some(job_id) = ctx.jobs.current_job().map(|j| j.id) else {
             eprintln!("seal: fg: no jobs to foreground");
             return 1;
         };
-        let _ = wait_foreground(ctx.jobs, job.id, true, true, ctx.shell_pgid);
+        let _ = wait_foreground(&mut ctx.jobs, job_id, true, true, ctx.shell_pgid);
         0
     }
 }
