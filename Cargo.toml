@@ -8,7 +8,7 @@ readme = "README.md"
 
 [dependencies]
 is_executable = "1.0.5"
-mlua = { version = "0.11.6", features = ["lua55"] }
+mlua = { version = "0.11.6", features = ["lua55", "vendored"] }
 nix = { version = "0.31.2", features = ["fs", "hostname", "process", "signal", "user"] }
 rustyline = { version = "17.0.2", features = ["with-file-history", "custom-bindings"] }
 thiserror = "2.0.11"
