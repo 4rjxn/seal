@@ -6,7 +6,7 @@ use crate::{
     shell::{builtins::BuiltinRegistry, env::Env, jobs::JobTable, opts::ShellOpts},
 };
 
-mod builtins;
+pub mod builtins;
 pub mod env;
 pub mod executor;
 pub mod job_control;
