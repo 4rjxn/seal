@@ -1,11 +1,17 @@
-use mlua::Function;
+use std::cell::RefCell;
 
-use crate::shell::builtins::BuiltIn;
+use mlua::{Function, Lua};
+
+use crate::{
+    lua::bridge::setup_lua_scope,
+    shell::{Shell, builtins::BuiltIn},
+};
 
 pub struct LuaBuiltin {
     pub name: String,
     pub help: String,
     pub func: Function,
+    pub lua: Lua,
 }
 
 impl BuiltIn for LuaBuiltin {
@@ -17,13 +23,18 @@ impl BuiltIn for LuaBuiltin {
         &self.help
     }
 
-    fn run(&self, _ctx: &mut crate::shell::builtins::ShellContext, args: &[String]) -> i32 {
-        match self.func.call::<Option<i32>>(args.to_vec()) {
-            Ok(s) => s.unwrap_or(0),
-            Err(e) => {
-                eprintln!("{e}");
-                1
-            }
-        }
+    fn run(&self, ctx: &mut Shell, args: &[String]) -> i32 {
+        let shell_ref = RefCell::new(ctx);
+        let _ = self.lua.scope(|scope| {
+            setup_lua_scope(
+                &shell_ref,
+                scope,
+                self.lua.globals().get("seal")?,
+                &self.lua,
+            )?;
+            self.func.call::<Option<i32>>(args.to_vec())?;
+            Ok(())
+        });
+        0
     }
 }
