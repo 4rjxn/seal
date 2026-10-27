@@ -25,7 +25,7 @@ impl BuiltIn for LuaBuiltin {
 
     fn run(&self, ctx: &mut Shell, args: &[String]) -> i32 {
         let shell_ref = RefCell::new(ctx);
-        let _ = self.lua.scope(|scope| {
+        let result = self.lua.scope(|scope| {
             setup_lua_scope(
                 &shell_ref,
                 scope,
@@ -35,6 +35,9 @@ impl BuiltIn for LuaBuiltin {
             self.func.call::<Option<i32>>(args.to_vec())?;
             Ok(())
         });
-        0
+        match result {
+            Ok(_) => 0,
+            Err(_) => 1,
+        }
     }
 }
