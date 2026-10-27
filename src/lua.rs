@@ -26,7 +26,7 @@ impl LuaEngine {
         let shell = RefCell::new(shell);
         let shell_ref = &shell;
         self.lua.scope(|scope| {
-            setup_lua_scope(shell_ref, scope, self.lua.globals().get("seal")?)?;
+            setup_lua_scope(shell_ref, scope, self.lua.globals().get("seal")?, &self.lua)?;
             self.lua.load(script).exec()?;
             Ok(())
         })
