@@ -12,7 +12,6 @@ pub mod executor;
 pub mod job_control;
 pub mod jobs;
 pub mod opts;
-pub mod shell_error;
 
 pub struct Shell {
     pub env: Env,
