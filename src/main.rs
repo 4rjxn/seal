@@ -45,8 +45,8 @@ fn main() {
     match &engine {
         Some(e) => {
             if let Some(path) = config_path {
-                if let Err(_) = e.run_luafile(&mut shell, path) {
-                    eprintln!("seal: running without any config");
+                if let Err(e) = e.run_luafile(&mut shell, path) {
+                    eprintln!("seal: lua: {e}");
                 };
             }
         }
