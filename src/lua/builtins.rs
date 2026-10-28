@@ -32,12 +32,17 @@ impl BuiltIn for LuaBuiltin {
                 self.lua.globals().get("seal")?,
                 &self.lua,
             )?;
-            self.func.call::<Option<i32>>(&args[1..])?;
-            Ok(())
+            match self.func.call::<Option<i32>>(&args[1..]) {
+                Ok(a) => Ok(a),
+                Err(_) => Ok(None),
+            }
         });
         match result {
-            Ok(_) => 0,
-            Err(_) => 1,
+            Ok(code) => code.unwrap_or(0),
+            Err(e) => {
+                eprintln!("seal: {}: {e}", self.name);
+                1
+            }
         }
     }
 }
