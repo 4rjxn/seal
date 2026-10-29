@@ -34,7 +34,7 @@ impl std::fmt::Display for Token {
             Token::AndIf => write!(f, "&&"),
             Token::OrIf => write!(f, "||"),
             Token::Semi => write!(f, ";"),
-            Token::Bg => todo!(),
+            Token::Bg => write!(f, "&"),
             Token::Redir { fd: Some(fd), kind } => write!(f, "{fd}{kind}"),
             Token::Redir { fd: None, kind } => write!(f, "{kind}"),
             Token::LParen => write!(f, "("),
