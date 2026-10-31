@@ -13,8 +13,8 @@ use nix::{
 
 use crate::shell::jobs::{JobEvent, JobState, JobTable};
 
-pub fn give_terminal_to(is_interactive: bool, pgid: Pid) {
-    if is_interactive {
+pub fn give_terminal_to(monitor_jobs: bool, pgid: Pid) {
+    if monitor_jobs {
         unsafe {
             tcsetpgrp(STDIN_FILENO, pgid.as_raw());
         }
@@ -49,18 +49,27 @@ pub fn wait_foreground(
     jobs: &mut JobTable,
     id: usize,
     resume: bool,
-    is_interactive: bool,
+    monitor_jobs: bool,
     shell_pgid: Pid,
 ) -> Option<ForeGroundOutcome> {
     let pgid = jobs.get(id)?.pgid;
     jobs.set_background(id, false);
-    give_terminal_to(is_interactive, pgid);
+    give_terminal_to(monitor_jobs, pgid);
     if resume {
         let _ = killpg(pgid, SIGCONT);
         jobs.mark_continued(id);
     }
     while jobs.get(id).map(|j| j.state()) == Some(JobState::Running) {
-        match waitpid(Pid::from_raw(-pgid.as_raw()), Some(WaitPidFlag::WUNTRACED)) {
+        let (target, flags) = if monitor_jobs {
+            (
+                Some(Pid::from_raw(-pgid.as_raw())),
+                Some(WaitPidFlag::WUNTRACED),
+            )
+        } else {
+            // In a subshell without job monitoring, wait on the specific child PID!
+            (None, None)
+        };
+        match waitpid(target, flags) {
             Ok(st) => {
                 jobs.apply_status(st);
             }
@@ -68,7 +77,7 @@ pub fn wait_foreground(
             Err(_) => break,
         }
     }
-    give_terminal_to(is_interactive, shell_pgid);
+    give_terminal_to(monitor_jobs, shell_pgid);
     let job = jobs.get(id)?;
     let exit_code = job.exit_code();
     let interrupted = job.was_interrupted();

@@ -77,6 +77,9 @@ fn execute_background(shell: &mut Shell, syntax: &SyntaxNode) -> i32 {
                 nix::unistd::ForkResult::Child => {
                     let _ = setpgid(Pid::from_raw(0), Pid::from_raw(0));
                     reset_child_signals();
+
+                    shell.shell_opts.monitor_jobs = false;
+
                     let exit_code = execute(shell, complex);
                     exit(exit_code);
                 }
@@ -123,8 +126,14 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
                 return 1;
             }
         };
-        let child = match spawn_child(shell, command, pgid, prev_read.as_ref(), write_end.as_ref())
-        {
+        let child = match spawn_child(
+            shell,
+            command,
+            pgid,
+            prev_read.as_ref(),
+            write_end.as_ref(),
+            is_background,
+        ) {
             Ok(child) => child,
             Err(e) => {
                 eprintln!("seal: fork failed: {e}");
@@ -134,11 +143,9 @@ fn execute_pipeline(shell: &mut Shell, cmds: &[Command], is_background: bool) ->
                 return 1;
             }
         };
-        if pgid.is_none() {
-            pgid = Some(child);
-        }
-        if let Some(job_pgid) = pgid {
-            let _ = setpgid(child, job_pgid);
+        let leader_pgid = pgid.get_or_insert(child);
+        if shell.shell_opts.monitor_jobs {
+            let _ = setpgid(child, *leader_pgid);
         }
         children.push(child);
         drop(write_end);
@@ -261,7 +268,7 @@ fn wait_pipeline(
         &mut shell.jobs,
         id,
         false,
-        shell.shell_opts.is_interactive,
+        shell.shell_opts.monitor_jobs,
         shell.shell_pgid,
     ) else {
         return 1;
@@ -289,11 +296,17 @@ fn spawn_child(
     pgid: Option<Pid>,
     prev_read: Option<&OwnedFd>,
     write_end: Option<&OwnedFd>,
+    is_pipeline_bg: bool,
 ) -> nix::Result<Pid> {
     match unsafe { fork()? } {
         nix::unistd::ForkResult::Child => {
-            let target_pgid = pgid.unwrap_or(Pid::from_raw(0));
-            let _ = setpgid(Pid::from_raw(0), target_pgid);
+            if shell.shell_opts.monitor_jobs {
+                let target_pgid = pgid.unwrap_or(Pid::from_raw(0));
+                let _ = setpgid(Pid::from_raw(0), target_pgid);
+            }
+            if is_pipeline_bg {
+                shell.shell_opts.monitor_jobs = false;
+            }
 
             if let Some(r) = prev_read {
                 let _ = dup2_stdin(r);

@@ -26,6 +26,7 @@ fn main() {
 
     let mut shell = Shell::with_opts(ShellOpts {
         is_interactive: true,
+        monitor_jobs: true,
     });
     if isatty(stdin()).unwrap_or(false)
         && unsafe { tcsetpgrp(STDIN_FILENO, shell.shell_pgid.as_raw()) } != 0
