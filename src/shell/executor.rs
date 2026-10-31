@@ -314,7 +314,7 @@ fn spawn_child(
             if let Some(w) = write_end {
                 let _ = dup2_stdout(w);
             }
-
+            reset_child_signals();
             child_exec(shell, cmd);
             exit(1); //exit if child fails to replace image.
         }
@@ -347,7 +347,6 @@ fn exec_external(shell: &mut Shell, cmd: &UnitCommand) -> ! {
         .collect();
 
     let c_env = shell.env.as_execve_list();
-    reset_child_signals();
     match execve(&c_path, &c_args, &c_env) {
         Err(EACCES) => {
             eprintln!("seal: {program} Permission denied");
