@@ -1,91 +1,98 @@
-# Seal 🦭
+# Seal
 
-Seal is a lightweight, Unix-like shell written in Rust. It provides a familiar command-line interface with support for essential shell features, including built-in commands, external program execution, input/output redirection, and piping. Seal is my personal thing as result this may contain some explicit content.
+<img src="docs/img/seal-logo-horizontal.svg" alt="seal" width="600">
+
+A hobby shell written in Rust, scriptable with Lua.
+
+> ⚠️ Seal is under very agile development. Expect breaking changes.
+
+Seal is my hobby project and my daily-driver shell. It covers all my own requirements, and I'm happy with it.
 
 ## Features
 
-- **Built-in Commands**:
-  - `cd [dir]`: Change the current working directory. Supports `~` for the home directory.
-  - `echo [args]`: Print arguments to the standard output.
-  - `pwd`: Print the current working directory.
-  - `type [command]`: Indicate how a command would be interpreted (builtin or external).
-  - `exit`: Exit the shell.
-- **External Command Execution**: Seamlessly runs programs available in your `$PATH`.
-- **Redirection**:
-  - `>` or `1>`: Redirect standard output to a file (truncates).
-  - `2>`: Redirect standard error to a file (truncates).
-  - `>>` or `1>>`: Append standard output to a file.
-  - `2>>`: Append standard error to a file.
-- **Pipelining**: Support for basic command piping (`cmd1 | cmd2`).
-- **Quote Handling**: Supports single quotes (`'`), double quotes (`"`), and backslashes (`\`) for complex command arguments.
-- **Line Editing**: Powered by `rustyline` for a smooth terminal experience with history and line editing capabilities.
+- **Lua builtins.** Write functions in Lua, register them with the shell runtime, and run them like any other builtin command. (This is similar to aliases in bash, but I haven't explored the full potential of the feature yet.)
+- **Plug-and-play Rust builtins.** A builtin is just a struct implementing a Rust trait. Define it however you want, as long as it implements the trait.
 
-## Getting Started
+## Philosophy
 
-### Prerequisites
+Seal is a niche shell, and it makes choices that not everyone will like:
 
-- [Rust](https://www.rust-lang.org/tools/install) (2024 edition or later)
+- It does **not** fully follow POSIX conventions.
+- It is built around Lua scripting rather than bash-style scripting.
+- I follow a different ideology form normal people so seal will 100% refelect it.
 
-### Installation
+## Limitations
 
-0. direct installation (build from source).
-   ```bash
-   curl -fSSL https://raw.githubusercontent.com/4rjxn/seal/refs/heads/trunk/invoke.sh | sh
-   ```
+Please read these before trying seal:
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/4rjxn/seal.git
-   cd seal
-   ```
+- **Not POSIX-compliant.** Seal cannot run bash scripts on its own.
+- **Interactive only.** It cannot be used as a proper login shell yet.
+- **Unstable.** Config format, APIs, and behaviour may change between commits.
 
-2. Build the project:
-   ```bash
-   cargo build --release
-   ```
+## Installation
 
-3. Run the shell:
-   ```bash
-   ./target/release/seal
-   ```
+You have two options.
 
-## Usage Examples
+### Compile from source (recommended)
 
-### Basic Commands
-```bash
->> pwd
-/home/user/seal
->> echo Hello, Seal!
-Hello, Seal!
+Release binaries may lag behind the latest code, so I recommend building from source for now.
+
+```sh
+git clone https://github.com/4rjxn/seal.git
+cd seal
+cargo build --release
 ```
 
-### Redirection
-```bash
->> echo "Hello, World" > hello.txt
->> cat hello.txt
-Hello, World
->> ls non_existent_file 2> error.log
+The binary will be at `target/release/seal`.
+
+### Release binary
+
+Download a binary from the [releases page](https://github.com/<user>/seal/releases). Releases are more tested, but they lack the newest features.
+
+## Configuration
+
+Seal reads its Lua config from `~/.config/seal/init.lua`. Create the file if it doesn't exist.
+
+## Lua API
+
+Seal currently exposes two functions, and nothing more:
+
+| Function | Description |
+| --- | --- |
+| `seal.run(...)` | Returns the exit code of the process, run takes in a raw string (eg: "cat help.txt") |
+| `seal.register(name,discription, fn)` | Registers a Lua function as a builtin command named `name`. |
+
+## Writing a Lua builtin
+
+1. Create `~/.config/seal/init.lua` if it does not exist.
+2. Write a function in that file.
+3. Register it with `seal.register()`.
+4. Restart the shell.
+
+```lua
+-- ~/.config/seal/init.lua
+seal.register("ll", function(args)
+	seal.run("ls -lah --color")
+end)
 ```
 
-### Pipelines
-```bash
->> ls | grep .rs
-main.rs
-parser.rs
+Then, in seal:
+
+```sh
+$ ll
+<see for yourself :)>
 ```
 
-### Complex Arguments
-```bash
->> echo "This is a \"quoted\" argument"
-This is a "quoted" argument
-```
+## Writing a Rust builtin
 
-## Dependencies
+1. Create a new file named after your builtin under `src/shell/builtins/`.
+2. Define a struct in that file.
+3. Implement the `BuiltIn` trait for that struct.
+4. Add the file as a module in `src/shell/builtins.rs`.
+5. Register the struct in the builtin registry.
 
-- `rustyline`: For command-line editing and history.
-- `nix`: For Unix system calls (fork, exec, signals).
-- `is_executable`: To verify executable permissions in `$PATH`.
 
-## License
+## Contributing
 
-This project is open-source and available under the GNU General Public License version 2.0 (GPL-2.0).
+always welcome.
+
